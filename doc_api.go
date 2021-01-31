@@ -1,4 +1,4 @@
 /*
-Here we describe the package in general for the API docs.
+Here we describe the package lucy general for the API docs.
 */
-package islelib
+package main

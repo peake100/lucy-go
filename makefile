@@ -13,6 +13,10 @@ test:
 	# Clear the output files.
 	echo > $(STD_OUT_LOG)
 	echo > $(STD_ERR_LOG)
+	-docker pull 'mongo'
+	-docker stop mongotest
+	-docker rm -f mongotest
+	docker run -d --name mongotest -p 127.0.0.1:57017:27017/tcp mongo
 	# Run tests. I honestly don't quite understand the piping bullshit that has to
 	# happen here to send stdout and stderr to tee separately ( in order to
 	# both save and display them ), but the internet says this is the solution and it
@@ -23,6 +27,14 @@ test:
 	-xunit-viewer -r $(JUNIT_REPORT) -o $(TEST_REPORT)
 	-go tool cover -html=$(COVERAGE_LOG) -o $(COVERAGE_REPORT)
 	-python3 ./zdevelop/make_scripts/py_open_test_reports.py
+	-docker stop mongotest
+
+.PHONY: mongotest
+mongotest:
+	-docker pull 'mongo'
+	-docker stop mongotest
+	-docker rm -f mongotest
+	docker run -d --name mongotest -p 127.0.0.1:57017:27017/tcp mongo
 
 .PHONY: lint
 lint:
