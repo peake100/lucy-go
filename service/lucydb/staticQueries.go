@@ -19,6 +19,8 @@ const TempJobField = "jobToUpdate"
 // and this field removed before the pipeline completes.
 const TempStageField = "stageToUpdate"
 
+const statusUnset = "[UNSET]"
+
 // updateJobSummaries is the bson expression to summarize the job status and
 // result based on stage statuses and results.
 var updateJobSummaries = m{
@@ -37,9 +39,10 @@ var updateJobSummaries = m{
 							// See comments on updateStageStatusSwitch and
 							// updateStageResultSwitch for an explanation of this
 							// starting state.
-							"status": lucy.Status_COMPLETED,
-							"result": lucy.Result_SUCCEEDED,
+							"status":    statusUnset,
+							"result":    lucy.Result_SUCCEEDED,
 							"run_count": 0,
+							"progress":  0,
 						},
 						"in": m{
 							"status": updateStageStatusSwitch,
@@ -47,8 +50,26 @@ var updateJobSummaries = m{
 							"run_count": m{
 								"$max": arr{"$$this.run_count", "$$value.run_count"},
 							},
+							"progress": m{
+								"$add": arr{"$$this.progress", "$$value.progress"},
+							},
 						},
 					},
+				},
+			},
+		},
+	},
+}
+
+var finalizeJobProgress = m{
+	"$set": m{
+		TempJobField + ".progress": m{
+			"$min": arr{
+				float32(1.0),
+				m{"$divide": arr{
+					"$" + TempJobField + ".progress",
+					m{"$size": "$" + TempJobField + ".stages"},
+				},
 				},
 			},
 		},
@@ -76,7 +97,7 @@ var updateStageStatusSwitch = m{
 			},
 
 			// Otherwise, if any stage is running (meaning we have previously
-			// encountered) a running stage OR the current stage is running, then our
+			// encountered) a RUNNING stage OR the current stage is RUNNING, then our
 			// job status should be set to running.
 			m{
 				"case": m{"$eq": arr{"$$value.status", lucy.Status_RUNNING}},
@@ -88,17 +109,43 @@ var updateStageStatusSwitch = m{
 			},
 
 			// For a job to be completed, then ALL stages must be completed. We start
-			// our $$value with status = completed, and as long as it hasn't been
-			// changed by any previous stages AND the current stage is also completed,
-			// we keep completed.
+			// our $$value with status = [UNSET], so if our stage is completed, and
+			// our current running value is COMPLETE or [UNSET], then all values we
+			// have encountered so far are COMPLETED, which means the job is completed
+			// (so far)
 			m{
 				"case": m{
 					"$and": arr{
 						m{"$eq": arr{"$$this.status", lucy.Status_COMPLETED}},
-						m{"$eq": arr{"$$value.status", lucy.Status_COMPLETED}},
+						m{"$or": arr{
+							// If our current value is unset, this is the first value
+							// we are running into.
+							m{"$eq": arr{"$$value.status", lucy.Status_COMPLETED}},
+							m{"$eq": arr{"$$value.status", statusUnset}},
+						}},
 					},
 				},
-				"then": "$$value.status",
+				"then": lucy.Status_COMPLETED,
+			},
+
+			// Otherwise, if our current value is completed, and this item is pending,
+			// then the our job is PARTIALLY complete, so we are RUNNING, even if no
+			// active stage is running. It might be between stage runs.
+			m{
+				"case": m{"$eq": arr{"$$value.status", lucy.Status_COMPLETED}},
+				"then": lucy.Status_RUNNING,
+			},
+
+			// OR if our current value is pending and this stage is completed, we are
+			// doing stages out of order and we are running.
+			m{
+				"case": m{
+					"$and": arr{
+						m{"$eq": arr{"$$value.status", lucy.Status_PENDING}},
+						m{"$eq": arr{"$$this.status", lucy.Status_COMPLETED}},
+					},
+				},
+				"then": lucy.Status_RUNNING,
 			},
 		},
 
@@ -113,6 +160,7 @@ var updateStageStatusSwitch = m{
 var updateStageResultSwitch = m{
 	"$switch": m{
 		"branches": arr{
+			// If any value is FAILED, then the job is FAILED.
 			m{
 				"case": m{"$eq": arr{"$$value.result", lucy.Result_FAILED}},
 				"then": "$$value.result",
@@ -121,6 +169,8 @@ var updateStageResultSwitch = m{
 				"case": m{"$eq": arr{"$$this.result", lucy.Result_FAILED}},
 				"then": "$$this.result",
 			},
+
+			// If ALL STAGES we encounter are SUCCEEDED, then the job is SUCCEEDED.
 			m{
 				"case": m{
 					"$and": arr{
@@ -131,6 +181,7 @@ var updateStageResultSwitch = m{
 				"then": "$$value.result",
 			},
 		},
+		// Otherwise there is no result yet.
 		"default": lucy.Result_NONE,
 	},
 }
@@ -154,7 +205,7 @@ var UpdateBatchSummaries = m{
 							"success_count":   uint32(0),
 							"failure_count":   uint32(0),
 							"run_count":       uint32(0),
-							"progress": float32(0),
+							"progress":        float32(0),
 						},
 						"in": m{
 							"pending_count": bsonIncrementSummary(
@@ -210,7 +261,12 @@ var FinalizeBatchProgressStage = m{
 			"$cond": arr{
 				m{"$eq": arr{"$complete_count", "$job_count"}},
 				float32(1.0),
-				"$progress",
+				m{
+					"$min": arr{
+						float32(1.0),
+						m{"$divide": arr{"$progress", "$job_count"}},
+					},
+				},
 			},
 		},
 	},

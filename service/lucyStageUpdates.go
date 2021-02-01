@@ -22,11 +22,11 @@ var emptyResponse = new(emptypb.Empty)
 
 // stageUpdate holds the information needed for a stage update.
 type stageUpdate struct {
-	Filter bson.M
-	Pipeline bson.A
-	UpdateType string
+	Filter         bson.M
+	Pipeline       bson.A
+	UpdateType     string
 	StatusPassList []lucy.Status
-	TimeField string
+	TimeField      string
 }
 
 // updateJobStageHandleErr handles running the update and deducing the correct error
@@ -57,7 +57,7 @@ func (service Lucy) updateJobStageHandleErr(
 
 func (service Lucy) updateJobStageCheckForBadStatus(
 	ctx context.Context, update stageUpdate,
-) error {
+) (err error) {
 	// It's possible that we did not find a record because our record was in the wrong
 	// state. Let's do another search without the state restriction to see if the job
 	// id and stage index exist at all.
@@ -66,14 +66,15 @@ func (service Lucy) updateJobStageCheckForBadStatus(
 	delete(elemMatch, "status")
 
 	// We're going to try this operation 3 times.
-	for i := 0 ; i < 3 ; i++ {
+	for i := 0; i < 3; i++ {
 		// Extract the status.
-		findOpts := options.FindOne().SetProjection(m{"jobs.stages.$.status": 1})
+		findOpts := options.FindOne().SetProjection(m{"jobs.stages.$": 1})
 		findResult := service.db.Jobs.FindOne(ctx, update.Filter, findOpts)
+		err = findResult.Err()
 
 		// If there was no error once we remove the status check, that means the stage
 		// is in a bad state, and we need to return an error that indicates this.
-		if findResult.Err() == nil {
+		if err == nil {
 			passListStrings := make([]string, len(update.StatusPassList))
 			for j, thisPass := range update.StatusPassList {
 				passListStrings[j] = thisPass.String()
@@ -82,7 +83,7 @@ func (service Lucy) updateJobStageCheckForBadStatus(
 			return service.errs.NewErr(
 				lucy.ErrWrongJobStageStatus,
 				fmt.Sprintf(
-					"cannot apply %v update. job stage must be in one of the " +
+					"cannot apply %v update. job stage must be in one of the "+
 						"following states: %v",
 					update.UpdateType,
 					strings.Join(passListStrings, ","),
@@ -91,22 +92,23 @@ func (service Lucy) updateJobStageCheckForBadStatus(
 				nil,
 			)
 			// Otherwise, if we still cannot find the stage, return the original error.
-		} else if errors.Is(findResult.Err(), mongo.ErrNoDocuments) {
+		} else if errors.Is(err, mongo.ErrNoDocuments) {
 			return service.errs.NewErr(
 				pkerr.ErrNotFound,
 				"no job stage found that matched stage_id. make sure the job"+
 					" id is correct, and the stage index is not pur of bounds",
 				nil,
-				findResult.Err(),
+				err,
 			)
 		}
 		// If we got some other error, try again.
 	}
 
 	// Return an unknown error with the following message.
-	return errors.New(
-		"could not verify whether stage id was not found or stage status was bad" +
-			" during stage update",
+	return fmt.Errorf(
+		"could not verify whether stage id was not found or stage status was"+
+			" bad during stage update: %w",
+		err,
 	)
 }
 
@@ -140,11 +142,11 @@ func (service Lucy) updateJobStage(
 
 	pipeline := lucydb.CreateStageUpdatePipeline(stageId, update, timeField)
 	updateInfo := stageUpdate{
-		Filter:     filter,
-		Pipeline:   pipeline,
-		UpdateType: updateType,
+		Filter:         filter,
+		Pipeline:       pipeline,
+		UpdateType:     updateType,
 		StatusPassList: statusPassList,
-		TimeField: timeField,
+		TimeField:      timeField,
 	}
 
 	err := service.updateJobStageHandleErr(ctx, updateInfo)
@@ -154,7 +156,6 @@ func (service Lucy) updateJobStage(
 
 	return nil
 }
-
 
 func (service Lucy) StartStage(
 	ctx context.Context, stage *lucy.StartStage,
@@ -167,7 +168,7 @@ func (service Lucy) StartStage(
 		Result                 lucy.Result          `bson:"result"`
 		ResultData             *anypb.Any           `bson:"result_data"`
 		Error                  *pkerr.Error         `bson:"error"`
-		RunCount 			   bson.M				`bson:"run_count"`
+		RunCount               bson.M               `bson:"run_count"`
 	}{
 		StartStageUpdate: stage.Update,
 		Status:           lucy.Status_RUNNING,
@@ -228,15 +229,15 @@ func (service Lucy) CompleteStage(
 	// Create our update data
 	update := struct {
 		*lucy.CompleteStageUpdate `bson:",inline"`
-		Status                 lucy.Status          `bson:"status"`
-		Progress               float32              `bson:"progress"`
-		Result                 lucy.Result          `bson:"result"`
+		Status                    lucy.Status `bson:"status"`
+		Progress                  float32     `bson:"progress"`
+		Result                    lucy.Result `bson:"result"`
 	}{
 		CompleteStageUpdate: stage.Update,
-		Status:           lucy.Status_COMPLETED,
+		Status:              lucy.Status_COMPLETED,
 		// Set progress to 1.0, we are done
-		Progress:         1.0,
-		Result:           result,
+		Progress: 1.0,
+		Result:   result,
 	}
 
 	err := service.updateJobStage(

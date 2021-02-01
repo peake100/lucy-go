@@ -43,7 +43,7 @@ var file_lucy_proto_service_proto_rawDesc = []byte{
 	0x15, 0x6c, 0x75, 0x63, 0x79, 0x5f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6a, 0x6f, 0x62, 0x73,
 	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x18, 0x6c, 0x75, 0x63, 0x79, 0x5f, 0x70, 0x72, 0x6f,
 	0x74, 0x6f, 0x2f, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x32, 0xc8, 0x03, 0x0a, 0x04, 0x4c, 0x75, 0x63, 0x79, 0x12, 0x2b, 0x0a, 0x0b, 0x43, 0x72, 0x65,
+	0x32, 0xd1, 0x03, 0x0a, 0x04, 0x4c, 0x75, 0x63, 0x79, 0x12, 0x2b, 0x0a, 0x0b, 0x43, 0x72, 0x65,
 	0x61, 0x74, 0x65, 0x42, 0x61, 0x74, 0x63, 0x68, 0x12, 0x0e, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e,
 	0x4e, 0x65, 0x77, 0x42, 0x61, 0x74, 0x63, 0x68, 0x1a, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61,
 	0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x12, 0x25, 0x0a, 0x08, 0x47, 0x65, 0x74, 0x42, 0x61, 0x74,
@@ -57,24 +57,24 @@ var file_lucy_proto_service_proto_rawDesc = []byte{
 	0x1a, 0x11, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x4a,
 	0x6f, 0x62, 0x73, 0x12, 0x21, 0x0a, 0x06, 0x47, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x12, 0x0c, 0x2e,
 	0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x1a, 0x09, 0x2e, 0x6c, 0x75,
-	0x63, 0x79, 0x2e, 0x4a, 0x6f, 0x62, 0x12, 0x2f, 0x0a, 0x08, 0x4c, 0x69, 0x73, 0x74, 0x4a, 0x6f,
-	0x62, 0x73, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x09, 0x2e, 0x6c, 0x75, 0x63,
-	0x79, 0x2e, 0x4a, 0x6f, 0x62, 0x30, 0x01, 0x12, 0x36, 0x0a, 0x0a, 0x53, 0x74, 0x61, 0x72, 0x74,
-	0x53, 0x74, 0x61, 0x67, 0x65, 0x12, 0x10, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x53, 0x74, 0x61,
-	0x72, 0x74, 0x53, 0x74, 0x61, 0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12,
-	0x3c, 0x0a, 0x0d, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x53, 0x74, 0x61, 0x67, 0x65,
-	0x12, 0x13, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73,
-	0x53, 0x74, 0x61, 0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3c, 0x0a,
-	0x0d, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74, 0x61, 0x67, 0x65, 0x12, 0x13,
-	0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74,
-	0x61, 0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x42, 0x22, 0x5a, 0x20, 0x67,
-	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31,
-	0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x63, 0x79, 0x2e, 0x4a, 0x6f, 0x62, 0x12, 0x36, 0x0a, 0x0a, 0x53, 0x74, 0x61, 0x72, 0x74, 0x53,
+	0x74, 0x61, 0x67, 0x65, 0x12, 0x10, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x53, 0x74, 0x61, 0x72,
+	0x74, 0x53, 0x74, 0x61, 0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3c,
+	0x0a, 0x0d, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x53, 0x74, 0x61, 0x67, 0x65, 0x12,
+	0x13, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x53,
+	0x74, 0x61, 0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3c, 0x0a, 0x0d,
+	0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74, 0x61, 0x67, 0x65, 0x12, 0x13, 0x2e,
+	0x6c, 0x75, 0x63, 0x79, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74, 0x61,
+	0x67, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x38, 0x0a, 0x06, 0x52, 0x75,
+	0x6e, 0x6e, 0x65, 0x72, 0x12, 0x12, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x52, 0x75, 0x6e, 0x6e,
+	0x65, 0x72, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
+	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79,
+	0x28, 0x01, 0x30, 0x01, 0x42, 0x22, 0x5a, 0x20, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
+	0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79,
+	0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var file_lucy_proto_service_proto_goTypes = []interface{}{
@@ -85,34 +85,35 @@ var file_lucy_proto_service_proto_goTypes = []interface{}{
 	(*StartStage)(nil),          // 4: lucy.StartStage
 	(*ProgressStage)(nil),       // 5: lucy.ProgressStage
 	(*CompleteStage)(nil),       // 6: lucy.CompleteStage
-	(*Batch)(nil),               // 7: lucy.Batch
-	(*CreatedJobs)(nil),         // 8: lucy.CreatedJobs
-	(*Job)(nil),                 // 9: lucy.Job
+	(*RunnerUpdate)(nil),        // 7: lucy.RunnerUpdate
+	(*Batch)(nil),               // 8: lucy.Batch
+	(*CreatedJobs)(nil),         // 9: lucy.CreatedJobs
+	(*Job)(nil),                 // 10: lucy.Job
 }
 var file_lucy_proto_service_proto_depIdxs = []int32{
-	0, // 0: lucy.Lucy.CreateBatch:input_type -> lucy.NewBatch
-	1, // 1: lucy.Lucy.GetBatch:input_type -> cereal.UUID
-	2, // 2: lucy.Lucy.ListBatches:input_type -> google.protobuf.Empty
-	3, // 3: lucy.Lucy.CreateJobs:input_type -> lucy.NewJobs
-	1, // 4: lucy.Lucy.GetJob:input_type -> cereal.UUID
-	2, // 5: lucy.Lucy.ListJobs:input_type -> google.protobuf.Empty
-	4, // 6: lucy.Lucy.StartStage:input_type -> lucy.StartStage
-	5, // 7: lucy.Lucy.ProgressStage:input_type -> lucy.ProgressStage
-	6, // 8: lucy.Lucy.CompleteStage:input_type -> lucy.CompleteStage
-	1, // 9: lucy.Lucy.CreateBatch:output_type -> cereal.UUID
-	7, // 10: lucy.Lucy.GetBatch:output_type -> lucy.Batch
-	7, // 11: lucy.Lucy.ListBatches:output_type -> lucy.Batch
-	8, // 12: lucy.Lucy.CreateJobs:output_type -> lucy.CreatedJobs
-	9, // 13: lucy.Lucy.GetJob:output_type -> lucy.Job
-	9, // 14: lucy.Lucy.ListJobs:output_type -> lucy.Job
-	2, // 15: lucy.Lucy.StartStage:output_type -> google.protobuf.Empty
-	2, // 16: lucy.Lucy.ProgressStage:output_type -> google.protobuf.Empty
-	2, // 17: lucy.Lucy.CompleteStage:output_type -> google.protobuf.Empty
-	9, // [9:18] is the sub-list for method output_type
-	0, // [0:9] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: lucy.Lucy.CreateBatch:input_type -> lucy.NewBatch
+	1,  // 1: lucy.Lucy.GetBatch:input_type -> cereal.UUID
+	2,  // 2: lucy.Lucy.ListBatches:input_type -> google.protobuf.Empty
+	3,  // 3: lucy.Lucy.CreateJobs:input_type -> lucy.NewJobs
+	1,  // 4: lucy.Lucy.GetJob:input_type -> cereal.UUID
+	4,  // 5: lucy.Lucy.StartStage:input_type -> lucy.StartStage
+	5,  // 6: lucy.Lucy.ProgressStage:input_type -> lucy.ProgressStage
+	6,  // 7: lucy.Lucy.CompleteStage:input_type -> lucy.CompleteStage
+	7,  // 8: lucy.Lucy.Runner:input_type -> lucy.RunnerUpdate
+	1,  // 9: lucy.Lucy.CreateBatch:output_type -> cereal.UUID
+	8,  // 10: lucy.Lucy.GetBatch:output_type -> lucy.Batch
+	8,  // 11: lucy.Lucy.ListBatches:output_type -> lucy.Batch
+	9,  // 12: lucy.Lucy.CreateJobs:output_type -> lucy.CreatedJobs
+	10, // 13: lucy.Lucy.GetJob:output_type -> lucy.Job
+	2,  // 14: lucy.Lucy.StartStage:output_type -> google.protobuf.Empty
+	2,  // 15: lucy.Lucy.ProgressStage:output_type -> google.protobuf.Empty
+	2,  // 16: lucy.Lucy.CompleteStage:output_type -> google.protobuf.Empty
+	2,  // 17: lucy.Lucy.Runner:output_type -> google.protobuf.Empty
+	9,  // [9:18] is the sub-list for method output_type
+	0,  // [0:9] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_lucy_proto_service_proto_init() }
@@ -164,14 +165,33 @@ type LucyClient interface {
 	CreateJobs(ctx context.Context, in *NewJobs, opts ...grpc.CallOption) (*CreatedJobs, error)
 	// GetJob fetches a single job.
 	GetJob(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*Job, error)
-	// Jobs returns a list jobs from newest to oldest.
-	ListJobs(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (Lucy_ListJobsClient, error)
 	// StartStage starts a job stage.
 	StartStage(ctx context.Context, in *StartStage, opts ...grpc.CallOption) (*empty.Empty, error)
 	// ProgressStage updates the progress on a stage.
 	ProgressStage(ctx context.Context, in *ProgressStage, opts ...grpc.CallOption) (*empty.Empty, error)
 	// CompleteStage completes a stage with result data.
 	CompleteStage(ctx context.Context, in *CompleteStage, opts ...grpc.CallOption) (*empty.Empty, error)
+	// RunnerUpdate allows a job runner to stream updates to Lucy, removing the overhead
+	// of making individual rpc requests for every update.
+	//
+	// The stage_id of the first message MUST be set, but subsequent messages can omit
+	// the id when updating the same stage.
+	//
+	// Progress updates to the DB are captured and throttled, allowing only 12 updates
+	// per second to reduce load on the DB. The service will trap progress updates, then
+	// once every 1/12th of a second, send the latest received to the DB.
+	//
+	// If an error occurs, the details on the pkerr.Error will include the number of the
+	// update that caused the error. CurrentUpdate numbers start at 0, and are tracked in order
+	// as they are received.
+	//
+	// It is recommended that each stream only be sent a single job at a time, though this
+	// recommendation is not enforced. For workers running multiple jobs in parallel,
+	// consider opening a separate Runner for each parallel job.
+	//
+	// When The server receives a confirm request, it will send back an emtpy message
+	// confirming that all previously sent requests have been processed without error.
+	Runner(ctx context.Context, opts ...grpc.CallOption) (Lucy_RunnerClient, error)
 }
 
 type lucyClient struct {
@@ -250,38 +270,6 @@ func (c *lucyClient) GetJob(ctx context.Context, in *cerealMessages.UUID, opts .
 	return out, nil
 }
 
-func (c *lucyClient) ListJobs(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (Lucy_ListJobsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Lucy_serviceDesc.Streams[1], "/lucy.Lucy/ListJobs", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &lucyListJobsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Lucy_ListJobsClient interface {
-	Recv() (*Job, error)
-	grpc.ClientStream
-}
-
-type lucyListJobsClient struct {
-	grpc.ClientStream
-}
-
-func (x *lucyListJobsClient) Recv() (*Job, error) {
-	m := new(Job)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *lucyClient) StartStage(ctx context.Context, in *StartStage, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/lucy.Lucy/StartStage", in, out, opts...)
@@ -309,6 +297,37 @@ func (c *lucyClient) CompleteStage(ctx context.Context, in *CompleteStage, opts 
 	return out, nil
 }
 
+func (c *lucyClient) Runner(ctx context.Context, opts ...grpc.CallOption) (Lucy_RunnerClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_Lucy_serviceDesc.Streams[1], "/lucy.Lucy/Runner", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &lucyRunnerClient{stream}
+	return x, nil
+}
+
+type Lucy_RunnerClient interface {
+	Send(*RunnerUpdate) error
+	Recv() (*empty.Empty, error)
+	grpc.ClientStream
+}
+
+type lucyRunnerClient struct {
+	grpc.ClientStream
+}
+
+func (x *lucyRunnerClient) Send(m *RunnerUpdate) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *lucyRunnerClient) Recv() (*empty.Empty, error) {
+	m := new(empty.Empty)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // LucyServer is the server API for Lucy service.
 type LucyServer interface {
 	// CreateBatch creates a new batch.
@@ -321,14 +340,33 @@ type LucyServer interface {
 	CreateJobs(context.Context, *NewJobs) (*CreatedJobs, error)
 	// GetJob fetches a single job.
 	GetJob(context.Context, *cerealMessages.UUID) (*Job, error)
-	// Jobs returns a list jobs from newest to oldest.
-	ListJobs(*empty.Empty, Lucy_ListJobsServer) error
 	// StartStage starts a job stage.
 	StartStage(context.Context, *StartStage) (*empty.Empty, error)
 	// ProgressStage updates the progress on a stage.
 	ProgressStage(context.Context, *ProgressStage) (*empty.Empty, error)
 	// CompleteStage completes a stage with result data.
 	CompleteStage(context.Context, *CompleteStage) (*empty.Empty, error)
+	// RunnerUpdate allows a job runner to stream updates to Lucy, removing the overhead
+	// of making individual rpc requests for every update.
+	//
+	// The stage_id of the first message MUST be set, but subsequent messages can omit
+	// the id when updating the same stage.
+	//
+	// Progress updates to the DB are captured and throttled, allowing only 12 updates
+	// per second to reduce load on the DB. The service will trap progress updates, then
+	// once every 1/12th of a second, send the latest received to the DB.
+	//
+	// If an error occurs, the details on the pkerr.Error will include the number of the
+	// update that caused the error. CurrentUpdate numbers start at 0, and are tracked in order
+	// as they are received.
+	//
+	// It is recommended that each stream only be sent a single job at a time, though this
+	// recommendation is not enforced. For workers running multiple jobs in parallel,
+	// consider opening a separate Runner for each parallel job.
+	//
+	// When The server receives a confirm request, it will send back an emtpy message
+	// confirming that all previously sent requests have been processed without error.
+	Runner(Lucy_RunnerServer) error
 }
 
 // UnimplementedLucyServer can be embedded to have forward compatible implementations.
@@ -350,9 +388,6 @@ func (*UnimplementedLucyServer) CreateJobs(context.Context, *NewJobs) (*CreatedJ
 func (*UnimplementedLucyServer) GetJob(context.Context, *cerealMessages.UUID) (*Job, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJob not implemented")
 }
-func (*UnimplementedLucyServer) ListJobs(*empty.Empty, Lucy_ListJobsServer) error {
-	return status.Errorf(codes.Unimplemented, "method ListJobs not implemented")
-}
 func (*UnimplementedLucyServer) StartStage(context.Context, *StartStage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartStage not implemented")
 }
@@ -361,6 +396,9 @@ func (*UnimplementedLucyServer) ProgressStage(context.Context, *ProgressStage) (
 }
 func (*UnimplementedLucyServer) CompleteStage(context.Context, *CompleteStage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteStage not implemented")
+}
+func (*UnimplementedLucyServer) Runner(Lucy_RunnerServer) error {
+	return status.Errorf(codes.Unimplemented, "method Runner not implemented")
 }
 
 func RegisterLucyServer(s *grpc.Server, srv LucyServer) {
@@ -460,27 +498,6 @@ func _Lucy_GetJob_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Lucy_ListJobs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(empty.Empty)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(LucyServer).ListJobs(m, &lucyListJobsServer{stream})
-}
-
-type Lucy_ListJobsServer interface {
-	Send(*Job) error
-	grpc.ServerStream
-}
-
-type lucyListJobsServer struct {
-	grpc.ServerStream
-}
-
-func (x *lucyListJobsServer) Send(m *Job) error {
-	return x.ServerStream.SendMsg(m)
-}
-
 func _Lucy_StartStage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartStage)
 	if err := dec(in); err != nil {
@@ -535,6 +552,32 @@ func _Lucy_CompleteStage_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Lucy_Runner_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LucyServer).Runner(&lucyRunnerServer{stream})
+}
+
+type Lucy_RunnerServer interface {
+	Send(*empty.Empty) error
+	Recv() (*RunnerUpdate, error)
+	grpc.ServerStream
+}
+
+type lucyRunnerServer struct {
+	grpc.ServerStream
+}
+
+func (x *lucyRunnerServer) Send(m *empty.Empty) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *lucyRunnerServer) Recv() (*RunnerUpdate, error) {
+	m := new(RunnerUpdate)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 var _Lucy_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "lucy.Lucy",
 	HandlerType: (*LucyServer)(nil),
@@ -575,9 +618,10 @@ var _Lucy_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "ListJobs",
-			Handler:       _Lucy_ListJobs_Handler,
+			StreamName:    "Runner",
+			Handler:       _Lucy_Runner_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "lucy_proto/service.proto",

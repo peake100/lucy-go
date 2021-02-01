@@ -29,3 +29,12 @@ var ErrJobCancelled = Sentinels.NewSentinel(
 	codes.FailedPrecondition,
 	"job is cancelled",
 )
+
+// ErrWorkerRestricted is returned when a job restricted to a certain worker receives
+// a start, update, or complete command from another worker.
+var ErrWorkerRestricted = Sentinels.NewSentinel(
+	"WorkerRestricted",
+	2002,
+	codes.PermissionDenied,
+	"job cannot be run by requesting worker",
+)

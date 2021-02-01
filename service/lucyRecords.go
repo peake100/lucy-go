@@ -109,13 +109,13 @@ func (service Lucy) CreateJobs(
 	// We're going to use this type to make our new job records.
 	type InsertJob struct {
 		*lucy.NewJob `bson:",inline"`
-		Id          *cerealMessages.UUID `bson:"id"`
-		Created     string `bson:"created"`
-		Modified    string `bson:"modified"`
-		Status      lucy.Status `bson:"status"`
-		Progress    float32 `bson:"progress"`
-		Result      lucy.Result `bson:"result"`
-		RunCount    uint32 `bson:"run_count"`
+		Id           *cerealMessages.UUID `bson:"id"`
+		Created      string               `bson:"created"`
+		Modified     string               `bson:"modified"`
+		Status       lucy.Status          `bson:"status"`
+		Progress     float32              `bson:"progress"`
+		Result       lucy.Result          `bson:"result"`
+		RunCount     uint32               `bson:"run_count"`
 	}
 
 	// We need to keep track of the job id's we make so we return them in the same
@@ -134,18 +134,18 @@ func (service Lucy) CreateJobs(
 		jobIds[i] = recordId
 
 		records[i] = InsertJob{
-			NewJob:      job,
-			Id:          recordId,
-			Created:     "$$NOW",
-			Modified:    "$$NOW",
-			Status:      lucy.Status_PENDING,
-			Progress:    0.0,
-			Result:      lucy.Result_NONE,
-			RunCount:    0,
+			NewJob:   job,
+			Id:       recordId,
+			Created:  "$$NOW",
+			Modified: "$$NOW",
+			Status:   lucy.Status_PENDING,
+			Progress: 0.0,
+			Result:   lucy.Result_NONE,
+			RunCount: 0,
 		}
 	}
 
-	// Update the batch.
+	// CurrentUpdate the batch.
 	filter := bson.M{
 		"id": jobs.Batch,
 	}
@@ -208,11 +208,4 @@ func (service Lucy) GetJob(
 	}
 
 	return job.Jobs[0], nil
-}
-
-// ListJobs implements lucy.LucyServer.
-func (service Lucy) ListJobs(
-	_ *empty.Empty, server lucy.Lucy_ListJobsServer,
-) error {
-	panic("implement me")
 }

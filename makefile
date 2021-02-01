@@ -29,8 +29,8 @@ test:
 	-python3 ./zdevelop/make_scripts/py_open_test_reports.py
 	-docker stop mongotest
 
-.PHONY: mongotest
-mongotest:
+.PHONY: testdb
+testdb:
 	-docker pull 'mongo'
 	-docker stop mongotest
 	-docker rm -f mongotest

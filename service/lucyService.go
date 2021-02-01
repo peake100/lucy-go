@@ -52,5 +52,13 @@ func (service *Lucy) RegisterOnServer(server *grpc.Server) {
 
 // NewLucy returns a new Lucy service.
 func NewLucy() *Lucy {
-	return new(Lucy)
+	return &Lucy{
+		errs: pkerr.NewErrGenerator(
+			"Lucy",
+			true,
+			true,
+			true,
+			true,
+		),
+	}
 }
