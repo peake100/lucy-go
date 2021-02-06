@@ -21,37 +21,60 @@ const TempStageField = "stageToUpdate"
 
 const statusUnset = "[UNSET]"
 
-// updateJobSummaries is the bson expression to summarize the job status and
-// result based on stage statuses and results.
-var updateJobSummaries = m{
-	"$set": m{
-		TempJobField: m{
-			// We're going to reduce on the job.stages field to build a temporary object
-			// with 'result' and 'status' fields that we will then merge into our job
-			// document to update it.
+// UpdateBatchSummaries is a bson expression to summarize the batch status and result
+// counts.
+var UpdateBatchSummaries = MustCompileStaticDocument(m{
+	"$replaceRoot": m{
+		"newRoot": m{
 			"$mergeObjects": arr{
-				"$" + TempJobField,
+				"$$ROOT",
+				m{"job_count": m{"$size": "$jobs"}},
 				m{
 					"$reduce": m{
-						"input": "$" + TempJobField + ".stages",
+						"input": "$jobs",
 						"initialValue": m{
-							// Start with status = COMPLETED and result = SUCCEEDED.
-							// See comments on updateStageStatusSwitch and
-							// updateStageResultSwitch for an explanation of this
-							// starting state.
-							"status":    statusUnset,
-							"result":    lucy.Result_SUCCEEDED,
-							"run_count": 0,
-							"progress":  0,
+							"pending_count":   uint32(0),
+							"cancelled_count": uint32(0),
+							"running_count":   uint32(0),
+							"completed_count": uint32(0),
+							"success_count":   uint32(0),
+							"failure_count":   uint32(0),
+							"run_count":       uint32(0),
+							"progress":        float32(0),
 						},
 						"in": m{
-							"status": updateStageStatusSwitch,
-							"result": updateStageResultSwitch,
-							"run_count": m{
-								"$max": arr{"$$this.run_count", "$$value.run_count"},
-							},
+							"pending_count": bsonIncrementSummary(
+								"$$value.pending_count",
+								"$$this.status",
+								lucy.Status_PENDING,
+							),
+							"cancelled_count": bsonIncrementSummary(
+								"$$value.cancelled_count",
+								"$$this.status",
+								lucy.Status_CANCELLED,
+							),
+							"running_count": bsonIncrementSummary(
+								"$$value.running_count",
+								"$$this.status",
+								lucy.Status_RUNNING,
+							),
+							"completed_count": bsonIncrementSummary(
+								"$$value.completed_count",
+								"$$this.status",
+								lucy.Status_COMPLETED,
+							),
+							"success_count": bsonIncrementSummary(
+								"$$value.success_count",
+								"$$this.result",
+								lucy.Result_SUCCEEDED,
+							),
+							"failure_count": bsonIncrementSummary(
+								"$$value.failure_count",
+								"$$this.result",
+								lucy.Result_FAILED,
+							),
 							"progress": m{
-								"$add": arr{"$$this.progress", "$$value.progress"},
+								"$add": arr{"$$value.progress", "$$this.progress"},
 							},
 						},
 					},
@@ -59,26 +82,84 @@ var updateJobSummaries = m{
 			},
 		},
 	},
-}
+})
 
-var finalizeJobProgress = m{
+// FinalizeBatchProgressStage is an aggregation pipeline stage that calculates the total
+// progress of the batch.
+var FinalizeBatchProgressStage = MustCompileStaticDocument(m{
+	// We want to handle floating point errors here, if all jobs are
+	// complete then our progress is 1.0, otherwise it is the sum of
+	// all job progress fields divided by job count. If that sum exceeds 1.0 due to
+	// floating-point errors, then cap it at 1.0.
 	"$set": m{
-		TempJobField + ".progress": m{
-			"$min": arr{
+		"progress": m{
+			"$cond": arr{
+				m{"$eq": arr{"$complete_count", "$job_count"}},
 				float32(1.0),
-				m{"$divide": arr{
-					"$" + TempJobField + ".progress",
-					m{"$size": "$" + TempJobField + ".stages"},
-				},
+				m{
+					"$min": arr{
+						float32(1.0),
+						m{"$divide": arr{"$progress", "$job_count"}},
+					},
 				},
 			},
 		},
 	},
+})
+
+var mapStageCancellationCancellationCond = m{
+	"$cond": arr{
+		// If this stage has succeeded or the stage has failed and cannot be retried,
+		// keep the existing status, otherwise cancel.
+		m{
+			"$or": arr{
+				m{"$eq": arr{"$$stage.result", lucy.Result_SUCCEEDED}},
+				m{
+					"$and": arr{
+						m{"$eq": arr{"$$stage.result", lucy.Result_FAILED}},
+						m{
+							// If the run count is max_retries + 1 then the job cannot
+							// be retried
+							"$eq": arr{
+								"$$stage.run_count",
+								m{"$add": arr{"$$stage.max_retries", 1}}},
+						},
+					},
+				},
+			},
+		},
+		"$$stage.status",
+		lucy.Status_CANCELLED,
+	},
 }
+
+// mapStageCancellation maps the job.stages field, cancelling all pending job stages.
+var mapStageCancellation = MustCompileStaticDocument(m{
+	"$mergeObjects": arr{
+		"$$job",
+		m{
+			"stages": m{
+				"$map": m{
+					"input": "$$job.stages",
+					"as":    "stage",
+					"in": m{
+						"$mergeObjects": arr{
+							"$$stage",
+							m{
+								"status":   mapStageCancellationCancellationCond,
+								"modified": "$$NOW",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+})
 
 // updateStageStatusSwitch is a switch expression used in updateJobSummaries to
 // update the stage.status field.
-var updateStageStatusSwitch = m{
+var updateStageStatusSwitch = MustCompileStaticDocument(m{
 	// This switch happens inside a reduce. "$$this" is the current stage object we are
 	// inspecting and $$value is the update object we are building to merge into our
 	// stage after the reduce completes.
@@ -94,6 +175,19 @@ var updateStageStatusSwitch = m{
 			m{
 				"case": m{"$eq": arr{"$$value.status", lucy.Status_CANCELLED}},
 				"then": "$$value.status",
+			},
+
+			// If the STATUS of any stage is failed or our running status is failed,
+			// then the job is completed. A single failure means the job is done
+			// running.
+			m{
+				"case": m{
+					"$or": arr{
+						m{"$eq": arr{"$$this.result", lucy.Result_FAILED}},
+						m{"$eq": arr{"$$value.result", lucy.Result_FAILED}},
+					},
+				},
+				"then": lucy.Status_COMPLETED,
 			},
 
 			// Otherwise, if any stage is running (meaning we have previously
@@ -153,11 +247,11 @@ var updateStageStatusSwitch = m{
 		// also been pending, so we are pending.
 		"default": lucy.Status_PENDING,
 	},
-}
+})
 
 // updateStageResultSwitch is a switch expression used in updateJobSummaries to
 // update the stage.result field.
-var updateStageResultSwitch = m{
+var updateStageResultSwitch = MustCompileStaticDocument(m{
 	"$switch": m{
 		"branches": arr{
 			// If any value is FAILED, then the job is FAILED.
@@ -184,90 +278,40 @@ var updateStageResultSwitch = m{
 		// Otherwise there is no result yet.
 		"default": lucy.Result_NONE,
 	},
-}
+})
 
-// UpdateBatchSummaries is a bson expression to summarize the batch status and result
-// counts.
-var UpdateBatchSummaries = m{
-	"$replaceRoot": m{
-		"newRoot": m{
-			"$mergeObjects": arr{
-				"$$ROOT",
-				m{"job_count": m{"$size": "$jobs"}},
-				m{
-					"$reduce": m{
-						"input": "$jobs",
-						"initialValue": m{
-							"pending_count":   uint32(0),
-							"cancelled_count": uint32(0),
-							"running_count":   uint32(0),
-							"completed_count": uint32(0),
-							"success_count":   uint32(0),
-							"failure_count":   uint32(0),
-							"run_count":       uint32(0),
-							"progress":        float32(0),
-						},
-						"in": m{
-							"pending_count": bsonIncrementSummary(
-								"$$value.pending_count",
-								"$$this.status",
-								lucy.Status_PENDING,
-							),
-							"cancelled_count": bsonIncrementSummary(
-								"$$value.cancelled_count",
-								"$$this.status",
-								lucy.Status_CANCELLED,
-							),
-							"running_count": bsonIncrementSummary(
-								"$$value.running_count",
-								"$$this.status",
-								lucy.Status_RUNNING,
-							),
-							"completed_count": bsonIncrementSummary(
-								"$$value.completed_count",
-								"$$this.status",
-								lucy.Status_COMPLETED,
-							),
-							"success_count": bsonIncrementSummary(
-								"$$value.success_count",
-								"$$this.result",
-								lucy.Result_SUCCEEDED,
-							),
-							"failure_count": bsonIncrementSummary(
-								"$$value.failure_count",
-								"$$this.result",
-								lucy.Result_FAILED,
-							),
-							"progress": m{
-								"$add": arr{"$$value.progress", "$$this.progress"},
-							},
-						},
-					},
-				},
-			},
-		},
+// updateJobSummariesReduceIn is the 'in' value for our reduce operation in
+// UpdateJobSummaries.
+var updateJobSummariesReduceIn = MustCompileStaticDocument(m{
+	"status": updateStageStatusSwitch,
+	"result": updateStageResultSwitch,
+	"run_count": m{
+		"$max": arr{"$$this.run_count", "$$value.run_count"},
 	},
-}
+	"progress": m{
+		"$add": arr{"$$this.progress", "$$value.progress"},
+	},
+})
 
-// FinalizeBatchProgressStage is an aggregation pipeline stage that calculates the total
-// progress of the batch.
-var FinalizeBatchProgressStage = m{
-	// We want to handle floating point errors here, if all jobs are
-	// complete then our progress is 1.0, otherwise it is the sum of
-	// all job progress fields divided by job count. If that sum exceeds 1.0 due to
-	// floating-point errors, then cap it at 1.0.
+// stageUpdatePipelineFinalizeJobProgress finalize the job.progress field for the stage
+// update pipeline.
+var stageUpdatePipelineFinalizeJobProgress = MustCompileStaticDocument(m{
 	"$set": m{
-		"progress": m{
-			"$cond": arr{
-				m{"$eq": arr{"$complete_count", "$job_count"}},
-				float32(1.0),
-				m{
-					"$min": arr{
-						float32(1.0),
-						m{"$divide": arr{"$progress", "$job_count"}},
-					},
-				},
-			},
-		},
+		TempJobField + ".progress": finalizeJobProgress("$" + TempJobField),
 	},
-}
+})
+
+// stageUpdatePipelineUpdateJobSummaries creates the job stage update pipeline stage for
+// updating the stage's job's summaries.
+var stageUpdatePipelineUpdateJobSummaries = MustCompileStaticDocument(m{
+	"$set": m{
+		TempJobField: UpdateJobSummaries("$" + TempJobField),
+	},
+})
+
+// stageUpdatePipelineRemoveTempFields Removes our temporary job and stage field once
+// we are done working on them. Pipelines are atomic, so no other caller will ever
+// observe these fields existing.
+var stageUpdatePipelineRemoveTempFields = MustCompileStaticDocument(m{
+	"$unset": arr{TempJobField, TempStageField},
+})

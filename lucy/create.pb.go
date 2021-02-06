@@ -251,10 +251,14 @@ type NewBatch struct {
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" bson:"type"`
 	// name is the human-readable name of the batch.
 	// @inject_tag: bson:"name"
-	Name string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty" bson:"name"`
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty" bson:"name"`
 	// description is the human-readable description of the batch.
 	// @inject_tag: bson:"description"
-	Description string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
+	// jobs holds the jobs for the batch. More jobs can be added after-the-fact if
+	// desired
+	// @inject_tag: bson:"jobs"
+	Jobs []*NewJob `protobuf:"bytes,4,rep,name=jobs,proto3" json:"jobs,omitempty" bson:"jobs"`
 }
 
 func (x *NewBatch) Reset() {
@@ -310,6 +314,72 @@ func (x *NewBatch) GetDescription() string {
 	return ""
 }
 
+func (x *NewBatch) GetJobs() []*NewJob {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+// CreatedBatch returns information about a newly created batch.
+type CreatedBatch struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// batch_id is the uuid of the newly created batch
+	BatchId *cerealMessages.UUID `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	// job_ids are the job uuids of the newly crated jobs, in the same order they were
+	// submitted.
+	JobIds []*cerealMessages.UUID `protobuf:"bytes,2,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
+}
+
+func (x *CreatedBatch) Reset() {
+	*x = CreatedBatch{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_lucy_proto_create_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CreatedBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatedBatch) ProtoMessage() {}
+
+func (x *CreatedBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_lucy_proto_create_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatedBatch.ProtoReflect.Descriptor instead.
+func (*CreatedBatch) Descriptor() ([]byte, []int) {
+	return file_lucy_proto_create_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CreatedBatch) GetBatchId() *cerealMessages.UUID {
+	if x != nil {
+		return x.BatchId
+	}
+	return nil
+}
+
+func (x *CreatedBatch) GetJobIds() []*cerealMessages.UUID {
+	if x != nil {
+		return x.JobIds
+	}
+	return nil
+}
+
 var File_lucy_proto_create_proto protoreflect.FileDescriptor
 
 var file_lucy_proto_create_proto_rawDesc = []byte{
@@ -340,15 +410,23 @@ var file_lucy_proto_create_proto_rawDesc = []byte{
 	0x04, 0x6a, 0x6f, 0x62, 0x73, 0x22, 0x2d, 0x0a, 0x0b, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64,
 	0x4a, 0x6f, 0x62, 0x73, 0x12, 0x1e, 0x0a, 0x03, 0x69, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
 	0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x52,
-	0x03, 0x69, 0x64, 0x73, 0x22, 0x54, 0x0a, 0x08, 0x4e, 0x65, 0x77, 0x42, 0x61, 0x74, 0x63, 0x68,
+	0x03, 0x69, 0x64, 0x73, 0x22, 0x76, 0x0a, 0x08, 0x4e, 0x65, 0x77, 0x42, 0x61, 0x74, 0x63, 0x68,
 	0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
-	0x74, 0x79, 0x70, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x04, 0x20, 0x01,
+	0x74, 0x79, 0x70, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
 	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x20, 0x0a, 0x0b, 0x64, 0x65, 0x73, 0x63,
-	0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x64,
-	0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x42, 0x22, 0x5a, 0x20, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30,
-	0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x64,
+	0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x04, 0x6a, 0x6f,
+	0x62, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e,
+	0x4e, 0x65, 0x77, 0x4a, 0x6f, 0x62, 0x52, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x22, 0x5e, 0x0a, 0x0c,
+	0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x42, 0x61, 0x74, 0x63, 0x68, 0x12, 0x27, 0x0a, 0x08,
+	0x62, 0x61, 0x74, 0x63, 0x68, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c,
+	0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x52, 0x07, 0x62, 0x61,
+	0x74, 0x63, 0x68, 0x49, 0x64, 0x12, 0x25, 0x0a, 0x07, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x73,
+	0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e,
+	0x55, 0x55, 0x49, 0x44, 0x52, 0x06, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x73, 0x42, 0x22, 0x5a, 0x20,
+	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65,
+	0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79,
+	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -363,27 +441,31 @@ func file_lucy_proto_create_proto_rawDescGZIP() []byte {
 	return file_lucy_proto_create_proto_rawDescData
 }
 
-var file_lucy_proto_create_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_lucy_proto_create_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_lucy_proto_create_proto_goTypes = []interface{}{
 	(*NewJob)(nil),              // 0: lucy.NewJob
 	(*NewJobs)(nil),             // 1: lucy.NewJobs
 	(*CreatedJobs)(nil),         // 2: lucy.CreatedJobs
 	(*NewBatch)(nil),            // 3: lucy.NewBatch
-	(*any.Any)(nil),             // 4: google.protobuf.Any
-	(*JobStage)(nil),            // 5: lucy.JobStage
-	(*cerealMessages.UUID)(nil), // 6: cereal.UUID
+	(*CreatedBatch)(nil),        // 4: lucy.CreatedBatch
+	(*any.Any)(nil),             // 5: google.protobuf.Any
+	(*JobStage)(nil),            // 6: lucy.JobStage
+	(*cerealMessages.UUID)(nil), // 7: cereal.UUID
 }
 var file_lucy_proto_create_proto_depIdxs = []int32{
-	4, // 0: lucy.NewJob.input:type_name -> google.protobuf.Any
-	5, // 1: lucy.NewJob.stages:type_name -> lucy.JobStage
-	6, // 2: lucy.NewJobs.batch:type_name -> cereal.UUID
+	5, // 0: lucy.NewJob.input:type_name -> google.protobuf.Any
+	6, // 1: lucy.NewJob.stages:type_name -> lucy.JobStage
+	7, // 2: lucy.NewJobs.batch:type_name -> cereal.UUID
 	0, // 3: lucy.NewJobs.jobs:type_name -> lucy.NewJob
-	6, // 4: lucy.CreatedJobs.ids:type_name -> cereal.UUID
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	7, // 4: lucy.CreatedJobs.ids:type_name -> cereal.UUID
+	0, // 5: lucy.NewBatch.jobs:type_name -> lucy.NewJob
+	7, // 6: lucy.CreatedBatch.batch_id:type_name -> cereal.UUID
+	7, // 7: lucy.CreatedBatch.job_ids:type_name -> cereal.UUID
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_lucy_proto_create_proto_init() }
@@ -441,6 +523,18 @@ func file_lucy_proto_create_proto_init() {
 				return nil
 			}
 		}
+		file_lucy_proto_create_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CreatedBatch); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -448,7 +542,7 @@ func file_lucy_proto_create_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_lucy_proto_create_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

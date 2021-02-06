@@ -22,8 +22,8 @@ type arr = bson.A
 // CreateBatch implements lucy.LucyServer.
 func (service Lucy) CreateBatch(
 	ctx context.Context, batch *lucy.NewBatch,
-) (*cerealMessages.UUID, error) {
-	recordId, err := lucydb.NewRecordId()
+) (*lucy.CreatedBatch, error) {
+	batchId, err := lucydb.NewRecordId()
 	if err != nil {
 		return nil, fmt.Errorf("error creating record: %w", err)
 	}
@@ -31,10 +31,12 @@ func (service Lucy) CreateBatch(
 	currentTime := time.Now().UTC()
 
 	batchRecord := &struct {
-		*lucy.NewBatch `bson:",inline"`
 		Id             *cerealMessages.UUID `bson:"id"`
 		Created        time.Time            `bson:"created"`
 		Modified       time.Time            `bson:"modified"`
+		Type           string               `bson:"type"`
+		Name           string               `bson:"name"`
+		Description    string               `bson:"description"`
 		Jobs           []*lucy.Job          `bson:"jobs"`
 		JobCount       uint32               `bson:"job_count"`
 		PendingCount   uint32               `bson:"pending_count"`
@@ -45,10 +47,12 @@ func (service Lucy) CreateBatch(
 		FailureCount   uint32               `bson:"failure_count"`
 		Progress       float32              `bson:"progress"`
 	}{
-		NewBatch:       batch,
-		Id:             recordId,
+		Id:             batchId,
 		Created:        currentTime,
 		Modified:       currentTime,
+		Type:           batch.Type,
+		Name:           batch.Name,
+		Description:    batch.Description,
 		Jobs:           make([]*lucy.Job, 0),
 		JobCount:       0,
 		PendingCount:   0,
@@ -60,12 +64,88 @@ func (service Lucy) CreateBatch(
 		Progress:       0,
 	}
 
+	created := &lucy.CreatedBatch{
+		BatchId: batchId,
+		JobIds:  nil,
+	}
+
 	_, err = service.db.Jobs.InsertOne(ctx, batchRecord)
 	if err != nil {
 		return nil, fmt.Errorf("error inserting document: %w", err)
 	}
 
-	return recordId, nil
+	// If we don't need to create any jobs, return.
+	if batch.Jobs == nil || len(batch.Jobs) == 0 {
+		return created, nil
+	}
+
+	// Otherwise create the jobs.
+	createdJobs, err := service.CreateJobs(ctx, &lucy.NewJobs{
+		Batch: batchId,
+		Jobs:  batch.Jobs,
+	})
+
+	// If there is an error, return.
+	if err != nil {
+		return nil, fmt.Errorf("error adding jobs: %w", err)
+	}
+	created.JobIds = createdJobs.Ids
+
+	return created, nil
+}
+
+// batchProjection projects all fields but the jobs field so we aren't fetching a ton
+// of jobs info we don't need every time we fetch the batch.
+var batchProjection = lucydb.MustCompileStaticDocument(bson.M{
+	"_id":             0,
+	"id":              1,
+	"created":         1,
+	"modified":        1,
+	"type":            1,
+	"name":            1,
+	"description":     1,
+	"job_count":       1,
+	"progress":        1,
+	"pending_count":   1,
+	"cancelled_count": 1,
+	"running_count":   1,
+	"completed_count": 1,
+	"success_count":   1,
+	"failure_count":   1,
+	"jobs.id":         1,
+})
+
+// documentDecoder is an interface for mongo results that can decode a document, like
+// mongo.SingleResult and mongo.Cursor.
+type documentDecoder interface {
+	// Decode is the method that decodes the document.
+	Decode(val interface{}) error
+}
+
+// decodeBatch handles decoding a lucy.Batch from a documentDecoder.
+func decodeBatch(decoder documentDecoder, batch *lucy.Batch) error {
+	// Create a value for us to decode the returned information.
+	decoded := struct {
+		// We'll extract the basic job info here.
+		Batch *lucy.Batch `bson:",inline"`
+		// Then make a struct type to receive the list of jobs which contain only an
+		// 'id' field.
+		JobIds []struct {
+			Id *cerealMessages.UUID `bson:"id"`
+		} `bson:"jobs"`
+	}{}
+	decoded.Batch = batch
+	err := decoder.Decode(&decoded)
+	if err != nil {
+		return fmt.Errorf("error umarshalling batch: %w", err)
+	}
+
+	batch.Jobs = make([]*cerealMessages.UUID, len(decoded.JobIds))
+	for i, jobId := range decoded.JobIds {
+		batch.Jobs[i] = jobId.Id
+	}
+
+	return nil
 }
 
 // GetBatch implements lucy.LucyServer.
@@ -76,35 +156,92 @@ func (service Lucy) GetBatch(
 		"id": uuid,
 	}
 
-	opts := options.FindOne().SetProjection(bson.M{"_id": 0, "jobs": 0})
+	opts := options.FindOne().SetProjection(batchProjection)
 	result := service.db.Jobs.FindOne(ctx, filter, opts)
-	if result.Err() != nil {
-		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
-			return nil, pkerr.ErrNotFound
-		}
-		return nil, fmt.Errorf("error getting result")
+	if err = service.CheckMongoErr(result.Err(), ""); err != nil {
+		return nil, err
 	}
 
 	batch = new(lucy.Batch)
-	err = result.Decode(batch)
+	err = decodeBatch(result, batch)
 	if err != nil {
-		return nil, fmt.Errorf("error umarshalling batch: %w", err)
+		return nil, err
 	}
 
 	return batch, nil
+}
+
+func (service Lucy) GetBatchJobs(
+	ctx context.Context, uuid *cerealMessages.UUID,
+) (*lucy.BatchJobs, error) {
+	filter := bson.M{"id": uuid}
+	projection := bson.M{"jobs": 1}
+
+	opts := options.FindOne().SetProjection(projection)
+	result := service.db.Jobs.FindOne(ctx, filter, opts)
+	if err := service.CheckMongoErr(result.Err(), ""); err != nil {
+		return nil, err
+	}
+
+	jobs := new(lucy.BatchJobs)
+	err := result.Decode(jobs)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding records: %w", err)
+	}
+
+	return jobs, nil
 }
 
 // ListBatches implements lucy.LucyServer.
 func (service Lucy) ListBatches(
 	_ *empty.Empty, server lucy.Lucy_ListBatchesServer,
 ) error {
-	panic("implement me")
+	opts := options.Find().
+		// Use our projection to only return job ids
+		SetProjection(batchProjection).
+		// Sort newest first.
+		SetSort(m{"created": -1})
+
+	// Set up our cursor
+	cursor, err := service.db.Jobs.Find(server.Context(), bson.M{}, opts)
+	if err != nil {
+		return fmt.Errorf("error getting db cursor: %w", err)
+	}
+
+	// Iterate over our cursor.
+	batch := new(lucy.Batch)
+	for cursor.Next(server.Context()) {
+		// Decode the batch.
+		if err = decodeBatch(cursor, batch); err != nil {
+			return err
+		}
+
+		// Send the batch.
+		if err = server.Send(batch); err != nil {
+			return fmt.Errorf("error sending batch: %w", err)
+		}
+	}
+
+	if cursor.Err() != nil {
+		return fmt.Errorf("error advancing cursor: %w", err)
+	}
+
+	return nil
 }
 
 // CreateJobs implements lucy.LucyServer.
 func (service Lucy) CreateJobs(
 	ctx context.Context, jobs *lucy.NewJobs,
 ) (*lucy.CreatedJobs, error) {
+
+	// CurrentUpdate the batch.
+	filter := bson.M{
+		"id": jobs.Batch,
+	}
+
+	// We need to keep track of the job id's we make so we return them in the same
+	// order that the jobs were sent.
+	jobIds := make([]*cerealMessages.UUID, len(jobs.Jobs))
 
 	// We're going to use this type to make our new job records.
 	type InsertJob struct {
@@ -118,13 +255,8 @@ func (service Lucy) CreateJobs(
 		RunCount     uint32               `bson:"run_count"`
 	}
 
-	// We need to keep track of the job id's we make so we return them in the same
-	// order that the jobs were sent.
-	jobIds := make([]*cerealMessages.UUID, len(jobs.Jobs))
-
 	// Store our list of records to be inserted into the Batch here.
 	records := make([]InsertJob, len(jobs.Jobs))
-
 	for i, job := range jobs.Jobs {
 		recordId, err := lucydb.NewRecordId()
 		if err != nil {
@@ -132,7 +264,6 @@ func (service Lucy) CreateJobs(
 		}
 
 		jobIds[i] = recordId
-
 		records[i] = InsertJob{
 			NewJob:   job,
 			Id:       recordId,
@@ -143,11 +274,6 @@ func (service Lucy) CreateJobs(
 			Result:   lucy.Result_NONE,
 			RunCount: 0,
 		}
-	}
-
-	// CurrentUpdate the batch.
-	filter := bson.M{
-		"id": jobs.Batch,
 	}
 
 	updatePipeline := arr{
@@ -169,18 +295,13 @@ func (service Lucy) CreateJobs(
 	// Return an emtpy record.
 	opts := new(options.FindOneAndUpdateOptions).SetProjection(bson.M{"_id": 1})
 	result := service.db.Jobs.FindOneAndUpdate(ctx, filter, updatePipeline, opts)
-	if result.Err() == nil {
-		created := &lucy.CreatedJobs{Ids: jobIds}
-		return created, nil
+	err := service.CheckMongoErr(result.Err(), "batch id not found")
+	if err != nil {
+		return nil, err
 	}
 
-	if errors.Is(result.Err(), mongo.ErrNoDocuments) {
-		return nil, service.errs.NewErr(
-			pkerr.ErrNotFound, "batch id not found", nil, result.Err(),
-		)
-	}
-
-	return nil, result.Err()
+	created := &lucy.CreatedJobs{Ids: jobIds}
+	return created, nil
 }
 
 // GetJob implements lucy.LucyServer.

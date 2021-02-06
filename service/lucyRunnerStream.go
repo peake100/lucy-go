@@ -22,17 +22,12 @@ type runnerState struct {
 	CurrentUpdate *lucy.RunnerUpdate
 	// UpdateNum the counter identifying the current update.
 	UpdateNum uint64
-	// ProgressThrottle is the streamProgressThrottle handling stream updates for this
-	// runner.
-	ProgressThrottle *streamProgressThrottle
 }
 
 // Runner implements lucy.LucyServer.
 func (service *Lucy) Runner(server lucy.Lucy_RunnerServer) (err error) {
 	// Set up our initial state
-	state := runnerState{
-		ProgressThrottle: service.newStreamProgressThrottle(server.Context()),
-	}
+	state := runnerState{}
 
 	// Catch and pack errors.
 	defer func() {
@@ -51,6 +46,9 @@ func (service *Lucy) Runner(server lucy.Lucy_RunnerServer) (err error) {
 
 		// Handle the update.
 		state, err = service.runnerHandleUpdate(server, state)
+		if err != nil {
+			return err
+		}
 
 		// Increment the updateNum and receive the next one.
 		state.UpdateNum++
@@ -62,21 +60,20 @@ func (service *Lucy) Runner(server lucy.Lucy_RunnerServer) (err error) {
 func (service *Lucy) runnerHandleUpdate(
 	server lucy.Lucy_RunnerServer, state runnerState,
 ) (runnerState, error) {
-	var newId bool
-	state, newId = updateStageId(state)
-
-	// If this update ID is not the same as our last id or this is not progress
-	// stage, force a progress update to make sure updates don't happen
-	// out-of-order.
-	_, isProgress := state.CurrentUpdate.Update.(*lucy.RunnerUpdate_Progress)
-	if newId || !isProgress {
-		if err := state.ProgressThrottle.Wait(); err != nil {
-			return state, err
-		}
-	}
+	state = updateStageId(state)
 
 	// Apply the update to the DB.
 	err := service.applyRunnerUpdate(server, state)
+	if err != nil {
+		return state, err
+	}
+
+	// If the caller did not ask for a confirmation, exit.
+	if !state.CurrentUpdate.Confirm {
+		return state, nil
+	}
+
+	err = server.Send(emptyResponse)
 	return state, err
 }
 
@@ -123,16 +120,12 @@ func receiveRunnerUpdate(server lucy.Lucy_RunnerServer) (*lucy.RunnerUpdate, err
 //
 // if clearProgress is returned as true, the update throttle should be cleared because
 // we are now either handling requests for a new id, or a non-progress update.
-func updateStageId(in runnerState) (out runnerState, newId bool) {
-	hasId := in.CurrentUpdate.StageId != nil
-	newId = hasId && !in.CurrentStageId.Eq(in.CurrentUpdate.StageId)
-
+func updateStageId(in runnerState) (out runnerState) {
 	// Replace the current StageId we are working on if one was provided.
-	if hasId {
+	if in.CurrentUpdate.StageId != nil {
 		in.CurrentStageId = in.CurrentUpdate.StageId
 	}
-
-	return in, newId
+	return in
 }
 
 // applyRunnerUpdate takes the current runner state and applies the update to the DB.
@@ -156,16 +149,13 @@ func (service *Lucy) applyRunnerUpdate(
 		}
 		// Progress updates get handled through the throttle to limit super chatty
 		// workers from overloading the database.
-		err = state.ProgressThrottle.UpdateProgress(state.UpdateNum, thisUpdate)
+		_, err = service.ProgressStage(server.Context(), thisUpdate)
 	case *lucy.RunnerUpdate_Complete:
 		thisUpdate := &lucy.CompleteStage{
 			StageId: state.CurrentStageId,
 			Update:  updateInfo.Complete,
 		}
 		_, err = service.CompleteStage(server.Context(), thisUpdate)
-	case *lucy.RunnerUpdate_Confirm:
-		// On a confirm, send back an empty response.
-		err = server.Send(emptyResponse)
 	default:
 		panic(fmt.Errorf(
 			"received unexpected update of type %T", updateInfo,
@@ -182,12 +172,6 @@ func (service *Lucy) packRunnerError(err error, updateNum uint64) error {
 		return nil
 	} else if errors.Is(err, errClientClosed) {
 		return nil
-	}
-
-	// If this is a throttle error, extract the actual error and request number.
-	if throttleErr, ok := err.(progressThrottleErr); ok {
-		err = throttleErr.err
-		updateNum = throttleErr.updateNum
 	}
 
 	detail, packErr := anypb.New(&lucy.RunnerErrorDetails{UpdateNum: updateNum})

@@ -6,16 +6,16 @@ import (
 )
 
 // Sentinels is the pkerr.SentinelIssuer for lucy, and creates sentinel errors with
-// an issuer of "Lucy".
-var Sentinels = pkerr.NewSentinelIssuer("Lucy", true)
+// an issuer of "Jobs".
+var Sentinels = pkerr.NewSentinelIssuer("Jobs", true)
 
-// ErrWrongJobStageStatus is returned when a job stage update cannot be made because the
+// ErrInvalidStageStatus is returned when a job stage update cannot be made because the
 // stage status is in the wrong state.
 //
 // This error will be returned, for instance, if a completed update is sent before
 // the stage has been started.
-var ErrWrongJobStageStatus = Sentinels.NewSentinel(
-	"StageState",
+var ErrInvalidStageStatus = Sentinels.NewSentinel(
+	"InvalidStageStatus",
 	2000,
 	codes.FailedPrecondition,
 	"job stage was not in correct state for update",
@@ -32,9 +32,18 @@ var ErrJobCancelled = Sentinels.NewSentinel(
 
 // ErrWorkerRestricted is returned when a job restricted to a certain worker receives
 // a start, update, or complete command from another worker.
+var ErrMaxRetriesExceeded = Sentinels.NewSentinel(
+	"MaxRetriesExceeded",
+	2002,
+	codes.FailedPrecondition,
+	"starting job would exceed max retry limit",
+)
+
+// ErrWorkerRestricted is returned when a job restricted to a certain worker receives
+// a start, update, or complete command from another worker.
 var ErrWorkerRestricted = Sentinels.NewSentinel(
 	"WorkerRestricted",
-	2002,
+	2003,
 	codes.PermissionDenied,
 	"job cannot be run by requesting worker",
 )

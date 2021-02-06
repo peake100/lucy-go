@@ -57,7 +57,9 @@ func BsonUpdateArrayItemOnMatch(
 	}
 }
 
-func BsonSetCurrentDates(update bson.M, fields []string) bson.M {
+// BsonStageSetCurrentDates takes a list of fields and applies the current datetime to
+// them.
+func BsonStageSetCurrentDates(update bson.M, fields []string) bson.M {
 	fieldUpdates := make(bson.M, len(fields))
 	for _, thisField := range fields {
 		fieldUpdates[thisField] = "$$NOW"
@@ -65,6 +67,33 @@ func BsonSetCurrentDates(update bson.M, fields []string) bson.M {
 
 	update["$set"] = fieldUpdates
 	return update
+}
+
+// MustCompileStaticDocument takes a bson.M and pre-compiles it using our registry to a
+// bson.Raw. This moves the overhead of serialization for large static query objects
+// from per-request runtime to once-at-initialization.
+func MustCompileStaticDocument(val bson.M) bson.Raw {
+	bin, err := bson.MarshalWithRegistry(BsonRegistry, val)
+	if err != nil {
+		panic(fmt.Errorf("error precompiling bson: %w", err))
+	}
+
+	return bin
+}
+
+// MustCompileStaticPipeline takes a bson.A value and pre-marshals it's items into s
+// []bson.Raw value to reduce marshalling load on each request.
+func MustCompileStaticPipeline(val bson.A) []bson.Raw {
+	result := make([]bson.Raw, len(val))
+	for i, thisDocument := range val {
+		bin, err := bson.MarshalWithRegistry(BsonRegistry, thisDocument)
+		if err != nil {
+			panic(fmt.Errorf("error precompiling pipeline: %w", err))
+		}
+		result[i] = bin
+	}
+
+	return result
 }
 
 // bsonIncrementSummary will increment the summary field in a reduce expression if
@@ -141,7 +170,7 @@ func CreateStageUpdatePipeline(
 	}
 
 	// Updates modified fields on the batch, job, and stage.
-	currentDateUpdates := BsonSetCurrentDates(
+	currentDateUpdates := BsonStageSetCurrentDates(
 		bson.M{},
 		dateFields,
 	)
@@ -181,12 +210,6 @@ func CreateStageUpdatePipeline(
 		},
 	}
 
-	// Removes our temporary job and stage field once we are done working on them.
-	// Pipelines are atomic, so no other caller will ever observe these fields existing.
-	removeTempFields := m{
-		"$unset": arr{TempJobField, TempStageField},
-	}
-
 	// Let's go over the flow of this pipeline:
 	return arr{
 		// 1. First we extract the job we want into a top-level field called
@@ -208,10 +231,10 @@ func CreateStageUpdatePipeline(
 		insertStage,
 		// 6. Re-calculate any summaries fields on the job that could be affected by the
 		//    new stage data.
-		updateJobSummaries,
+		stageUpdatePipelineUpdateJobSummaries,
 		// 7. The previous stage sums the progress of the stages, we still need to
 		//    average and clamp it.
-		finalizeJobProgress,
+		stageUpdatePipelineFinalizeJobProgress,
 		// 8. Re-insert the job into the batch.jobs array, overwriting it's original
 		//    value.
 		insertJob,
@@ -223,6 +246,127 @@ func CreateStageUpdatePipeline(
 		FinalizeBatchProgressStage,
 		// 11. Remove the temporary fields we were storing our job and job stage on for
 		//     updates.
-		removeTempFields,
+		stageUpdatePipelineRemoveTempFields,
+	}
+}
+
+// UpdateJobSummaries updates the a job's summaries where the job is identified by
+// jobIdentifier (field name or var).
+func UpdateJobSummaries(jobIdentifier string) bson.M {
+	return m{
+		// We're going to reduce on the job.stages field to build a temporary object
+		// with 'result' and 'status' fields that we will then merge into our job
+		// document to update it.
+		"$mergeObjects": arr{
+			jobIdentifier,
+			m{
+				"$reduce": m{
+					"input": jobIdentifier + ".stages",
+					"initialValue": m{
+						// Start with status = COMPLETED and result = SUCCEEDED.
+						// See comments on updateStageStatusSwitch and
+						// updateStageResultSwitch for an explanation of this
+						// starting state.
+						"status":    statusUnset,
+						"result":    lucy.Result_SUCCEEDED,
+						"run_count": 0,
+						"progress":  0,
+					},
+					"in": updateJobSummariesReduceIn,
+				},
+			},
+		},
+	}
+}
+
+// finalizeJobProgress takes a summed job.progress field and averages / clamps it.
+func finalizeJobProgress(jobIdentifier string) bson.M {
+	return m{
+		"$min": arr{
+			float32(1.0),
+			m{
+				"$divide": arr{
+					jobIdentifier + ".progress",
+					m{"$size": jobIdentifier + ".stages"},
+				},
+			},
+		},
+	}
+}
+
+// CancelJobsPipeline creates the update pipeline to cancel jobs from a list oh job ids.
+// Only PENDING jobs will be cancelled.
+//
+// If jobIds is nil, all pending jobs in affected batches will be cancelled.
+func CancelJobsPipeline(jobId *cerealMessages.UUID) bson.A {
+	// We are going to do this in a single map action.
+	mapAction := m{
+		"$let": m{
+			"vars": m{
+				"summarized": m{
+					"$let": m{
+						// First we cancel our pending stages and store that in a
+						// $$cancelled var.
+						"vars": m{
+							"cancelled": mapStageCancellation,
+						},
+						// Then we update the job summaries. This in turn gets set to
+						// the $$summarized var.
+						"in": UpdateJobSummaries(
+							"$$cancelled",
+						),
+					},
+				},
+			},
+			// Now we finalize the summaries from the job held in the $$summarized
+			// var.
+			"in": bson.M{
+				"$mergeObjects": arr{
+					"$$summarized",
+					m{
+						"progress": finalizeJobProgress("$$summarized"),
+						// Update the modified field.
+						"modified": "$$NOW",
+					},
+				},
+			},
+		},
+	}
+
+	// If we have a job id pass-list, put our update behind a check to see if the job
+	// id is in the list.
+	if jobId != nil {
+		mapAction = m{
+			"$cond": arr{
+				m{"$eq": arr{"$$job.id", jobId}},
+				mapAction,
+				"$$job",
+			},
+		}
+	}
+
+	// Now build the map computation.
+	updateStageStatuses := m{
+		"$set": m{
+			"jobs": m{
+				"$map": m{
+					"input": "$jobs",
+					"as":    "job",
+					"in":    mapAction,
+				},
+			},
+			// Update the modified field.
+			"modified": "$$NOW",
+		},
+	}
+
+	return arr{
+		// Update the stage statuses to CANCELLED.
+		updateStageStatuses,
+		// Once the jon updates are done we need to re-summarize the batch
+		// (cancelled_count will be changed).
+		UpdateBatchSummaries,
+		// Updating the summaries means we need to average and clamp the progress.
+		FinalizeBatchProgressStage,
 	}
 }

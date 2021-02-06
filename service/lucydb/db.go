@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/illuscio-dev/protoCereal-go/protoBson"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
@@ -28,18 +29,12 @@ func Connect(ctx context.Context) (result LucyDB, err error) {
 		mongoURI = "mongodb://127.0.0.1:27017"
 	}
 
-	bsonRegistryBuilder := bson.NewRegistryBuilder()
-
 	// protoCereal offers a number of bson codecs for automatic serialization of UUID
 	// and other types.
-	err = protoBson.RegisterCerealCodecs(bsonRegistryBuilder, protoBson.NewMongoOpts())
-	if err != nil {
-		return LucyDB{}, fmt.Errorf("error registering bson codecs: %w", err)
-	}
 
 	clientOpts := options.Client().
 		ApplyURI(mongoURI).
-		SetRegistry(bsonRegistryBuilder.Build())
+		SetRegistry(BsonRegistry)
 
 	result.Client, err = mongo.Connect(ctx, clientOpts)
 	if err != nil {
@@ -55,3 +50,15 @@ func Connect(ctx context.Context) (result LucyDB, err error) {
 
 	return result, nil
 }
+
+// BsonRegistry is our bson codec registry for marshalling and unmarshalling
+var BsonRegistry = func() *bsoncodec.Registry {
+	bsonRegistryBuilder := bson.NewRegistryBuilder()
+	err := protoBson.RegisterCerealCodecs(
+		bsonRegistryBuilder, protoBson.NewMongoOpts(),
+	)
+	if err != nil {
+		panic(fmt.Errorf("error building bson registry: %w", err))
+	}
+	return bsonRegistryBuilder.Build()
+}()

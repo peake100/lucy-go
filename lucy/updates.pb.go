@@ -9,7 +9,7 @@ package lucy
 import (
 	proto "github.com/golang/protobuf/proto"
 	any "github.com/golang/protobuf/ptypes/any"
-	empty "github.com/golang/protobuf/ptypes/empty"
+	_ "github.com/golang/protobuf/ptypes/empty"
 	cerealMessages "github.com/illuscio-dev/protoCereal-go/cerealMessages"
 	protogen "github.com/peake100/gRPEAKEC-go/pkerr/protogen"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -438,8 +438,10 @@ type RunnerUpdate struct {
 	//	*RunnerUpdate_Start
 	//	*RunnerUpdate_Progress
 	//	*RunnerUpdate_Complete
-	//	*RunnerUpdate_Confirm
 	Update isRunnerUpdate_Update `protobuf_oneof:"update"`
+	// confirm prompts the server to return an empty message. If received without error,
+	// all previously sent requests have been processed.
+	Confirm bool `protobuf:"varint,5,opt,name=confirm,proto3" json:"confirm,omitempty"`
 }
 
 func (x *RunnerUpdate) Reset() {
@@ -509,11 +511,11 @@ func (x *RunnerUpdate) GetComplete() *CompleteStageUpdate {
 	return nil
 }
 
-func (x *RunnerUpdate) GetConfirm() *empty.Empty {
-	if x, ok := x.GetUpdate().(*RunnerUpdate_Confirm); ok {
+func (x *RunnerUpdate) GetConfirm() bool {
+	if x != nil {
 		return x.Confirm
 	}
-	return nil
+	return false
 }
 
 type isRunnerUpdate_Update interface {
@@ -535,19 +537,11 @@ type RunnerUpdate_Complete struct {
 	Complete *CompleteStageUpdate `protobuf:"bytes,4,opt,name=complete,proto3,oneof"`
 }
 
-type RunnerUpdate_Confirm struct {
-	// confirm prompts the server to return an empty message. If received without error,
-	// all previously sent requests have been processed.
-	Confirm *empty.Empty `protobuf:"bytes,5,opt,name=confirm,proto3,oneof"`
-}
-
 func (*RunnerUpdate_Start) isRunnerUpdate_Update() {}
 
 func (*RunnerUpdate_Progress) isRunnerUpdate_Update() {}
 
 func (*RunnerUpdate_Complete) isRunnerUpdate_Update() {}
-
-func (*RunnerUpdate_Confirm) isRunnerUpdate_Update() {}
 
 // RunnerErrorDetails is set in the details of an pkerr.Error that occurs while
 // streaming RunnerUpdate values.
@@ -600,6 +594,102 @@ func (x *RunnerErrorDetails) GetUpdateNum() uint64 {
 	return 0
 }
 
+// CancelJobs passes a series of job ids to cancel.
+type CancelJobs struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JobIds []*cerealMessages.UUID `protobuf:"bytes,1,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
+}
+
+func (x *CancelJobs) Reset() {
+	*x = CancelJobs{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_lucy_proto_updates_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CancelJobs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelJobs) ProtoMessage() {}
+
+func (x *CancelJobs) ProtoReflect() protoreflect.Message {
+	mi := &file_lucy_proto_updates_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelJobs.ProtoReflect.Descriptor instead.
+func (*CancelJobs) Descriptor() ([]byte, []int) {
+	return file_lucy_proto_updates_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CancelJobs) GetJobIds() []*cerealMessages.UUID {
+	if x != nil {
+		return x.JobIds
+	}
+	return nil
+}
+
+// CancelBatches passes a series of batch ids to cancel.
+type CancelBatches struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	BatchIds []*cerealMessages.UUID `protobuf:"bytes,1,rep,name=batch_ids,json=batchIds,proto3" json:"batch_ids,omitempty"`
+}
+
+func (x *CancelBatches) Reset() {
+	*x = CancelBatches{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_lucy_proto_updates_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CancelBatches) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelBatches) ProtoMessage() {}
+
+func (x *CancelBatches) ProtoReflect() protoreflect.Message {
+	mi := &file_lucy_proto_updates_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelBatches.ProtoReflect.Descriptor instead.
+func (*CancelBatches) Descriptor() ([]byte, []int) {
+	return file_lucy_proto_updates_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CancelBatches) GetBatchIds() []*cerealMessages.UUID {
+	if x != nil {
+		return x.BatchIds
+	}
+	return nil
+}
+
 var File_lucy_proto_updates_proto protoreflect.FileDescriptor
 
 var file_lucy_proto_updates_proto_rawDesc = []byte{
@@ -650,7 +740,7 @@ var file_lucy_proto_updates_proto_rawDesc = []byte{
 	0x61, 0x67, 0x65, 0x49, 0x64, 0x12, 0x31, 0x0a, 0x06, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x43, 0x6f, 0x6d,
 	0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74, 0x61, 0x67, 0x65, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65,
-	0x52, 0x06, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x22, 0x98, 0x02, 0x0a, 0x0c, 0x52, 0x75, 0x6e,
+	0x52, 0x06, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x22, 0xfe, 0x01, 0x0a, 0x0c, 0x52, 0x75, 0x6e,
 	0x6e, 0x65, 0x72, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x12, 0x28, 0x0a, 0x08, 0x73, 0x74, 0x61,
 	0x67, 0x65, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x6c, 0x75,
 	0x63, 0x79, 0x2e, 0x53, 0x74, 0x61, 0x67, 0x65, 0x49, 0x44, 0x52, 0x07, 0x73, 0x74, 0x61, 0x67,
@@ -664,17 +754,22 @@ var file_lucy_proto_updates_proto_rawDesc = []byte{
 	0x63, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19,
 	0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x74,
 	0x61, 0x67, 0x65, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x48, 0x00, 0x52, 0x08, 0x63, 0x6f, 0x6d,
-	0x70, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x32, 0x0a, 0x07, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x72, 0x6d,
-	0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x48, 0x00,
-	0x52, 0x07, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x72, 0x6d, 0x42, 0x08, 0x0a, 0x06, 0x75, 0x70, 0x64,
-	0x61, 0x74, 0x65, 0x22, 0x32, 0x0a, 0x12, 0x52, 0x75, 0x6e, 0x6e, 0x65, 0x72, 0x45, 0x72, 0x72,
-	0x6f, 0x72, 0x44, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x12, 0x1c, 0x0a, 0x09, 0x55, 0x70, 0x64,
-	0x61, 0x74, 0x65, 0x4e, 0x75, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x09, 0x55, 0x70,
-	0x64, 0x61, 0x74, 0x65, 0x4e, 0x75, 0x6d, 0x42, 0x22, 0x5a, 0x20, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c,
-	0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x70, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x72, 0x6d,
+	0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x72, 0x6d, 0x42,
+	0x08, 0x0a, 0x06, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x22, 0x32, 0x0a, 0x12, 0x52, 0x75, 0x6e,
+	0x6e, 0x65, 0x72, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x44, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x12,
+	0x1c, 0x0a, 0x09, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x4e, 0x75, 0x6d, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x09, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x4e, 0x75, 0x6d, 0x22, 0x33, 0x0a,
+	0x0a, 0x43, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x4a, 0x6f, 0x62, 0x73, 0x12, 0x25, 0x0a, 0x07, 0x6a,
+	0x6f, 0x62, 0x5f, 0x69, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63,
+	0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x52, 0x06, 0x6a, 0x6f, 0x62, 0x49,
+	0x64, 0x73, 0x22, 0x3a, 0x0a, 0x0d, 0x43, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x42, 0x61, 0x74, 0x63,
+	0x68, 0x65, 0x73, 0x12, 0x29, 0x0a, 0x09, 0x62, 0x61, 0x74, 0x63, 0x68, 0x5f, 0x69, 0x64, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e,
+	0x55, 0x55, 0x49, 0x44, 0x52, 0x08, 0x62, 0x61, 0x74, 0x63, 0x68, 0x49, 0x64, 0x73, 0x42, 0x22,
+	0x5a, 0x20, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61,
+	0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75,
+	0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -689,7 +784,7 @@ func file_lucy_proto_updates_proto_rawDescGZIP() []byte {
 	return file_lucy_proto_updates_proto_rawDescData
 }
 
-var file_lucy_proto_updates_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_lucy_proto_updates_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_lucy_proto_updates_proto_goTypes = []interface{}{
 	(*StageID)(nil),             // 0: lucy.StageID
 	(*StartStageUpdate)(nil),    // 1: lucy.StartStageUpdate
@@ -700,31 +795,33 @@ var file_lucy_proto_updates_proto_goTypes = []interface{}{
 	(*CompleteStage)(nil),       // 6: lucy.CompleteStage
 	(*RunnerUpdate)(nil),        // 7: lucy.RunnerUpdate
 	(*RunnerErrorDetails)(nil),  // 8: lucy.RunnerErrorDetails
-	(*cerealMessages.UUID)(nil), // 9: cereal.UUID
-	(*protogen.Error)(nil),      // 10: pkerr.Error
-	(*any.Any)(nil),             // 11: google.protobuf.Any
-	(*empty.Empty)(nil),         // 12: google.protobuf.Empty
+	(*CancelJobs)(nil),          // 9: lucy.CancelJobs
+	(*CancelBatches)(nil),       // 10: lucy.CancelBatches
+	(*cerealMessages.UUID)(nil), // 11: cereal.UUID
+	(*protogen.Error)(nil),      // 12: pkerr.Error
+	(*any.Any)(nil),             // 13: google.protobuf.Any
 }
 var file_lucy_proto_updates_proto_depIdxs = []int32{
-	9,  // 0: lucy.StageID.job_id:type_name -> cereal.UUID
+	11, // 0: lucy.StageID.job_id:type_name -> cereal.UUID
 	0,  // 1: lucy.StartStage.stage_id:type_name -> lucy.StageID
 	1,  // 2: lucy.StartStage.update:type_name -> lucy.StartStageUpdate
 	0,  // 3: lucy.ProgressStage.stage_id:type_name -> lucy.StageID
 	3,  // 4: lucy.ProgressStage.update:type_name -> lucy.ProgressStageUpdate
-	10, // 5: lucy.CompleteStageUpdate.error:type_name -> pkerr.Error
-	11, // 6: lucy.CompleteStageUpdate.result_data:type_name -> google.protobuf.Any
+	12, // 5: lucy.CompleteStageUpdate.error:type_name -> pkerr.Error
+	13, // 6: lucy.CompleteStageUpdate.result_data:type_name -> google.protobuf.Any
 	0,  // 7: lucy.CompleteStage.stage_id:type_name -> lucy.StageID
 	5,  // 8: lucy.CompleteStage.update:type_name -> lucy.CompleteStageUpdate
 	0,  // 9: lucy.RunnerUpdate.stage_id:type_name -> lucy.StageID
 	1,  // 10: lucy.RunnerUpdate.start:type_name -> lucy.StartStageUpdate
 	3,  // 11: lucy.RunnerUpdate.progress:type_name -> lucy.ProgressStageUpdate
 	5,  // 12: lucy.RunnerUpdate.complete:type_name -> lucy.CompleteStageUpdate
-	12, // 13: lucy.RunnerUpdate.confirm:type_name -> google.protobuf.Empty
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	11, // 13: lucy.CancelJobs.job_ids:type_name -> cereal.UUID
+	11, // 14: lucy.CancelBatches.batch_ids:type_name -> cereal.UUID
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_lucy_proto_updates_proto_init() }
@@ -841,12 +938,35 @@ func file_lucy_proto_updates_proto_init() {
 				return nil
 			}
 		}
+		file_lucy_proto_updates_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CancelJobs); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_lucy_proto_updates_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CancelBatches); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_lucy_proto_updates_proto_msgTypes[7].OneofWrappers = []interface{}{
 		(*RunnerUpdate_Start)(nil),
 		(*RunnerUpdate_Progress)(nil),
 		(*RunnerUpdate_Complete)(nil),
-		(*RunnerUpdate_Confirm)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -854,7 +974,7 @@ func file_lucy_proto_updates_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_lucy_proto_updates_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
