@@ -1,9 +1,9 @@
-package lucydb
+package db
 
 import (
 	"fmt"
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
-	"github.com/peake100/lucy-go/lucy"
+	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -112,6 +112,53 @@ func bsonIncrementSummary(
 			summaryField,
 		},
 	}
+}
+
+func CreateAddJobPipeline(jobs *lucy.NewJobs, jobIds []*cerealMessages.UUID) bson.A {
+	// We're going to use this type to make our new job records.
+	type InsertJob struct {
+		*lucy.NewJob `bson:",inline"`
+		Id           *cerealMessages.UUID `bson:"id"`
+		Created      string               `bson:"created"`
+		Modified     string               `bson:"modified"`
+		Status       lucy.Status          `bson:"status"`
+		Progress     float32              `bson:"progress"`
+		Result       lucy.Result          `bson:"jobQueueResult"`
+		RunCount     uint32               `bson:"run_count"`
+	}
+
+	// Store our list of records to be inserted into the Batch here.
+	records := make([]InsertJob, len(jobs.Jobs))
+	for i, job := range jobs.Jobs {
+		records[i] = InsertJob{
+			NewJob:   job,
+			Id:       jobIds[i],
+			Created:  "$$NOW",
+			Modified: "$$NOW",
+			Status:   lucy.Status_PENDING,
+			Progress: 0.0,
+			Result:   lucy.Result_NONE,
+			RunCount: 0,
+		}
+	}
+
+	updatePipeline := arr{
+		// Add the job to the batch.
+		m{
+			"$set": m{
+				// The batch may already have jobs, so we need to make sure we are
+				// appending to the end of the curent list.
+				"jobs": m{
+					"$concatArrays": bson.A{"$jobs", records},
+				},
+				"modified": "$$NOW",
+			},
+		},
+		UpdateBatchSummaries,
+		FinalizeBatchProgressStage,
+	}
+
+	return updatePipeline
 }
 
 // CreateStageUpdatePipeline creates the bson array pipeline value to update a given

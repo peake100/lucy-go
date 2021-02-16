@@ -4,10 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
-	"github.com/peake100/lucy-go/lucy"
+	"github.com/peake100/lucy-go/pkg/lucy"
 	"google.golang.org/protobuf/types/known/anypb"
 	"io"
 )
+
+/*
+This file contains all lucy rpc methods for streaming job stage updates.
+*/
 
 // errClientClosed is a sentinel error to indicate the runner is should exit without
 // error.

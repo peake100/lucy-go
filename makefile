@@ -17,6 +17,10 @@ test:
 	-docker stop mongotest
 	-docker rm -f mongotest
 	docker run -d --name mongotest -p 127.0.0.1:57017:27017/tcp mongo
+	-docker pull 'rabbitmq:3.8-management'
+	-docker stop rabbittest
+	-docker rm -f rabbittest
+	docker run -d --name rabbittest -p 127.0.0.1:57018:5672/tcp rabbitmq:3.8-management
 	# Run tests. I honestly don't quite understand the piping bullshit that has to
 	# happen here to send stdout and stderr to tee separately ( in order to
 	# both save and display them ), but the internet says this is the solution and it
@@ -28,6 +32,7 @@ test:
 	-go tool cover -html=$(COVERAGE_LOG) -o $(COVERAGE_REPORT)
 	-python3 ./zdevelop/make_scripts/py_open_test_reports.py
 	-docker stop mongotest
+	-docker stop rabbittest
 
 .PHONY: testdb
 testdb:
@@ -35,6 +40,13 @@ testdb:
 	-docker stop mongotest
 	-docker rm -f mongotest
 	docker run -d --name mongotest -p 127.0.0.1:57017:27017/tcp mongo
+
+.PHONY: testbroker
+testbroker:
+	-docker pull 'rabbitmq:3.8-management'
+	-docker stop rabbittest
+	-docker rm -f rabbittest
+	docker run -d --name rabbittest -p 127.0.0.1:57018:5672/tcp -p 127.0.0.1:15672:15672/tcp rabbitmq:3.8-management
 
 .PHONY: lint
 lint:

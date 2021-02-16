@@ -1,7 +1,7 @@
-package lucydb
+package db
 
 import (
-	"github.com/peake100/lucy-go/lucy"
+	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
 )
 

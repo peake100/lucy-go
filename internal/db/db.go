@@ -1,4 +1,4 @@
-package lucydb
+package db
 
 import (
 	"context"

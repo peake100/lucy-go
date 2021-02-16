@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/peake100/lucy-go/service"
+	"github.com/peake100/lucy-go/internal/service"
 )
 
 func main() {

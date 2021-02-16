@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pktesting"
-	"github.com/peake100/lucy-go/lucy"
-	"github.com/peake100/lucy-go/service"
-	"github.com/peake100/lucy-go/service/lucydb"
-	"github.com/peake100/lucy-go/service/prototesting"
+	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/messaging"
+	"github.com/peake100/lucy-go/internal/prototesting"
+	"github.com/peake100/lucy-go/internal/service"
+	"github.com/peake100/lucy-go/pkg/lucy"
+	"github.com/peake100/lucy-go/pkg/lucy/events"
+	"github.com/peake100/rogerRabbit-go/amqp"
+	"github.com/peake100/rogerRabbit-go/amqptest"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
@@ -27,17 +32,47 @@ import (
 )
 
 func init() {
-	os.Setenv("LUCY_MONGO_URI", "mongodb://127.0.0.1:57017")
+	os.Setenv(db.EnvKeyMongoURI, "mongodb://127.0.0.1:57017")
+	os.Setenv(messaging.EnvKeyRabbitURI, "amqp://127.0.0.1:57018")
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
 const BatchType = "SortStudents"
 
-type lucySuite struct {
-	pktesting.ManagerSuite
+// eventQueue holds queue information and a consumer channel for lucy events.
+type eventQueue struct {
+	QueueInfo       amqp.Queue
+	ConsumerChannel <-chan amqp.Delivery
+}
 
-	db     lucydb.LucyDB
+type lucySuite struct {
+	// This base suite is the actual running suite.
+	*suite.Suite
+	// amqp holds helper methods that invoke our base suite.
+	amqp amqptest.AmqpSuite
+	// manager holds helper methods that invoke our base suite.
+	manager pktesting.ManagerSuite
+
+	db     db.LucyDB
 	client lucy.LucyClient
+
+	// eventQueueJobCreated is a queue that is declared and bound to the job creation
+	// events.
+	eventsJobCreated   eventQueue
+	eventsBatchCreated eventQueue
+
+	eventsStageStarted eventQueue
+	eventsJobStarted   eventQueue
+
+	eventsStageProgressed eventQueue
+	eventsJobProgressed   eventQueue
+
+	eventsStageCompleted eventQueue
+	eventsJobCompleted   eventQueue
+
+	eventsJobCancelled eventQueue
+
+	eventsBatchUpdated eventQueue
 }
 
 func (suite *lucySuite) SetupSuite() {
@@ -46,7 +81,7 @@ func (suite *lucySuite) SetupSuite() {
 	defer cancel()
 
 	var err error
-	suite.db, err = lucydb.Connect(ctx)
+	suite.db, err = db.Connect(ctx)
 	if !suite.NoError(err, "connect to db") {
 		suite.FailNow("could not connect to db")
 	}
@@ -57,15 +92,148 @@ func (suite *lucySuite) SetupSuite() {
 		suite.FailNow("could not drop database")
 	}
 
-	manger, _ := service.NewLucyManager()
-	suite.Manager = manger
-	suite.ManagerSuite.SetupSuite()
+	// Run the basic AMPQ setup.
+	suite.setupBasicAMPQ()
 
-	clientConn := suite.Manager.Test(suite.T()).GrpcClientConn(
+	// Setup the service manager ans get it running through the manager Suite..
+	manger, _ := service.NewLucyManager()
+	suite.manager.Manager = manger
+	suite.manager.SetupSuite()
+
+	// Create a gRPC client connection we can use to talk to the service.
+	clientConn := suite.manager.Manager.Test(suite.T()).GrpcClientConn(
 		true, grpc.WithInsecure(),
 	)
-
 	suite.client = lucy.NewLucyClient(clientConn)
+
+	// Set up the event queues so we can test them. We need to do this after the
+	// manager spins up so we know the service has declared the exchanges.
+	suite.setupEventQueues()
+}
+
+func (suite *lucySuite) setupBasicAMPQ() {
+	logger := zerolog.New(zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: zerolog.TimeFormatUnixMs,
+	})
+
+	config := amqp.DefaultConfig()
+	config.Logger = logger
+	suite.amqp.Opts = amqptest.
+		NewChannelSuiteOpts().
+		WithDialAddress("amqp://127.0.0.1:57018").
+		WithDialConfig(config)
+
+	suite.amqp.SetupSuite()
+
+	amqpChan := suite.amqp.ChannelConsume()
+	_ = amqpChan.ExchangeDelete(
+		messaging.JobsExchange,
+		false,
+		false,
+	)
+	_ = amqpChan.ExchangeDelete(
+		messaging.JobsEventsExchange,
+		false,
+		false,
+	)
+	_, _ = amqpChan.QueueDelete(
+		"JOBS.SortStudent", false, false, false,
+	)
+
+	suite.amqp.ReplaceChannels()
+}
+
+func (suite *lucySuite) setupEventQueues() {
+	suite.eventsBatchCreated = suite.createEventQueue(
+		"TestEventsBatchCreated",
+		"batch.*."+messaging.EventTypeCreated,
+	)
+
+	suite.eventsBatchUpdated = suite.createEventQueue(
+		"TestEventsBatchUpdated",
+		"batch.*."+messaging.EventTypeUpdated,
+	)
+
+	suite.eventsJobCreated = suite.createEventQueue(
+		"TestEventsJobCreated",
+		"batch.*.job.*."+messaging.EventTypeCreated,
+	)
+
+	suite.eventsStageStarted = suite.createEventQueue(
+		"TestEventsStageStarted",
+		"batch.*.job.*.stage.*."+messaging.EventTypeStart,
+	)
+
+	suite.eventsJobStarted = suite.createEventQueue(
+		"TestEventsJobStarted",
+		"batch.*.job.*."+messaging.EventTypeStart,
+	)
+
+	suite.eventsStageProgressed = suite.createEventQueue(
+		"TestEventsStageProgressed",
+		"batch.*.job.*.stage.*."+messaging.EventTypeProgress,
+	)
+
+	suite.eventsJobProgressed = suite.createEventQueue(
+		"TestEventsJobProgressed",
+		"batch.*.job.*."+messaging.EventTypeProgress,
+	)
+
+	suite.eventsStageCompleted = suite.createEventQueue(
+		"TestEventsStageCompleted",
+		"batch.*.job.*.stage.*."+messaging.EventTypeComplete,
+	)
+
+	suite.eventsJobCompleted = suite.createEventQueue(
+		"TestEventsJobCompleted",
+		"batch.*.job.*."+messaging.EventTypeComplete,
+	)
+
+	suite.eventsJobCancelled = suite.createEventQueue(
+		"TestEventsJobCancelled",
+		"batch.*.job.*."+messaging.EventTypeCancelled,
+	)
+}
+
+func (suite *lucySuite) createEventQueue(
+	queueName string, eventRoutingKey string,
+) eventQueue {
+
+	_, _ = suite.amqp.ChannelConsume().QueuePurge(
+		queueName, false,
+	)
+
+	queue := suite.amqp.CreateTestQueue(
+		queueName,
+		messaging.JobsEventsExchange,
+		eventRoutingKey,
+		false,
+	)
+
+	messageChan, err := suite.amqp.ChannelConsume().Consume(
+		queue.Name,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	if !suite.NoError(err, "consume job created events") {
+		suite.T().FailNow()
+	}
+
+	return eventQueue{
+		QueueInfo:       queue,
+		ConsumerChannel: messageChan,
+	}
+}
+
+func (suite *lucySuite) TearDownSuite() {
+	defer suite.amqp.TearDownSuite()
+	defer suite.manager.TearDownSuite()
 }
 
 func (suite *lucySuite) NewJob(studentName string) *lucy.NewJob {
@@ -93,6 +261,7 @@ func (suite *lucySuite) NewJob(studentName string) *lucy.NewJob {
 	}
 	return job
 }
+
 func (suite *lucySuite) NewBatch(studentNames []string) *lucy.NewBatch {
 	batch := &lucy.NewBatch{
 		Type:        "SortStudents",
@@ -105,6 +274,18 @@ func (suite *lucySuite) NewBatch(studentNames []string) *lucy.NewBatch {
 	}
 
 	return batch
+}
+
+func newLucySuite() lucySuite {
+	baseSuite := new(suite.Suite)
+
+	newSuite := lucySuite{
+		Suite:   baseSuite,
+		amqp:    amqptest.NewAmqpSuite(baseSuite, nil),
+		manager: pktesting.NewManagerSuite(baseSuite),
+	}
+
+	return newSuite
 }
 
 // This suite is going to test running batches.
@@ -121,29 +302,8 @@ type LucyBatchUnarySuite struct {
 	jobId02    *cerealMessages.UUID
 	jobAdded02 *lucy.NewJob
 
-	batchId02 *cerealMessages.UUID
-	batchId03 *cerealMessages.UUID
-}
-
-func (suite *LucyBatchUnarySuite) Test0010_NewBatch() {
-	batch := &lucy.NewBatch{
-		Type:        BatchType,
-		Name:        "Sort Students",
-		Description: "send new students through the sorting hat",
-	}
-
-	ctx, cancel := pktesting.New3SecondCtx()
-	defer cancel()
-
-	created, err := suite.client.CreateBatch(ctx, batch)
-	if !suite.NoError(err, "new batch id") {
-		suite.FailNow("could not create batch")
-	}
-
-	suite.batchId = created.BatchId
-	suite.batchAdded = batch
-
-	suite.T().Log("NEW BATCH ID:", suite.batchId.MustGoogle())
+	batch02Created *lucy.CreatedBatch
+	batch03Created *lucy.CreatedBatch
 }
 
 func (suite *LucyBatchUnarySuite) getBatch() *lucy.Batch {
@@ -238,6 +398,140 @@ func (suite *LucyBatchUnarySuite) getJob(jobId *cerealMessages.UUID) *lucy.Job {
 	return job
 }
 
+func (suite *LucyBatchUnarySuite) Test0010_NewBatch() {
+	batch := &lucy.NewBatch{
+		Type:        BatchType,
+		Name:        "Sort Students",
+		Description: "send new students through the sorting hat",
+	}
+
+	ctx, cancel := pktesting.New3SecondCtx()
+	defer cancel()
+
+	created, err := suite.client.CreateBatch(ctx, batch)
+	if !suite.NoError(err, "new batch id") {
+		suite.FailNow("could not create batch")
+	}
+
+	suite.batchId = created.BatchId
+	suite.batchAdded = batch
+
+	suite.T().Log("NEW BATCH ID:", suite.batchId.MustGoogle())
+}
+
+// getEvent gets an event message from an amqp message consumer channel, and failing the
+// test if any errors occur.
+//
+// The message will be decoded into the event value, which will then be returned.
+func (suite *LucyBatchUnarySuite) getEvent(
+	events eventQueue, event proto.Message, isLast bool,
+) (msg amqp.Delivery, decoded proto.Message) {
+	// Get the event or report a timeout after 3 seconds.
+	timeout := time.NewTimer(3 * time.Second)
+	defer timeout.Stop()
+
+	var ok bool
+	select {
+	case msg, ok = <-events.ConsumerChannel:
+		suite.True(ok, "event channel open")
+	case <-timeout.C:
+		suite.T().Errorf("timeout waiting for event")
+		suite.T().FailNow()
+	}
+
+	// Unmarshal the message into the event passed by the caller.
+	err := proto.Unmarshal(msg.Body, event)
+	if !suite.NoError(err, "decode event") {
+		suite.T().FailNow()
+	}
+
+	// If this event has a modified value, check that it is within a second of the
+	// truncated amqp modified time.
+	type hasModified interface {
+		GetModified() *timestamppb.Timestamp
+	}
+
+	eventModified, ok := event.(hasModified)
+	if !ok {
+		return msg, event
+	}
+
+	// AMPQ timestamps are rounded to the nearest second, so these values should be
+	// within a second of each other.
+	suite.WithinDuration(
+		eventModified.GetModified().AsTime(), msg.Timestamp.UTC(), 1*time.Second,
+	)
+
+	if !isLast {
+		return
+	}
+
+	// If we are expecting this to be the last event queued, confirm there are no
+	// more waiting in the queue.
+	queueInfo, err := suite.amqp.ChannelConsume().QueueInspect(events.QueueInfo.Name)
+	if !suite.NoError(err, "inspect queue") {
+		suite.T().FailNow()
+	}
+
+	// Make sure there are no undelivered messages
+	suite.Equal(
+		0,
+		queueInfo.Messages,
+		"0 remaining messages in event queue",
+	)
+
+	select {
+	case <-events.ConsumerChannel:
+		suite.T().Errorf(
+			"got extra event from queue. Event queue should be emtpy",
+		)
+	default:
+	}
+
+	return msg, event
+}
+
+func (suite *LucyBatchUnarySuite) checkEventStageId(
+	expected *events.StageId, received *events.StageId,
+) {
+	suite.Equal(
+		expected.BatchId.MustGoogle().String(), received.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+	suite.Equal(
+		expected.JobId.MustGoogle().String(), received.JobId.MustGoogle().String(),
+		"job id",
+	)
+	suite.Equal(
+		expected.StageIndex, received.StageIndex,
+		"stage index",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) checkEventJobId(
+	expected *events.JobId, received *events.JobId,
+) {
+	suite.Equal(
+		expected.BatchId.MustGoogle().String(), received.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+	suite.Equal(
+		expected.JobId.MustGoogle().String(), received.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0015_NewBatch_GetEvent() {
+	event := new(events.BatchCreated)
+	_, _ = suite.getEvent(suite.eventsBatchCreated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+}
+
 func (suite *LucyBatchUnarySuite) Test0020_GetBatch() {
 	batch := suite.getBatch()
 
@@ -286,6 +580,82 @@ func (suite *LucyBatchUnarySuite) Test0030_AddJob() {
 	suite.jobAdded01 = job
 }
 
+func (suite *LucyBatchUnarySuite) Test0033_GetMessageFromWorkerQueue_Job01() {
+	queue, err := suite.amqp.ChannelConsume().QueueDeclare(
+		"JOBS.SortStudent",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	if !suite.NoError(err, "queue declare") {
+		suite.T().FailNow()
+	}
+
+	err = suite.amqp.ChannelConsume().QueueBind(
+		queue.Name,
+		"SortStudent",
+		messaging.JobsExchange,
+		false,
+		nil,
+	)
+	if !suite.NoError(err, "bind queue") {
+		suite.T().FailNow()
+	}
+
+	delivery := suite.amqp.GetMessage(queue.Name, true)
+	if !suite.NoError(err, "get message") {
+		suite.T().FailNow()
+	}
+
+	jobId := new(cerealMessages.UUID)
+	err = proto.Unmarshal(delivery.Body, jobId)
+	if !suite.NoError(err, "unmarshal delivery body") {
+		suite.T().FailNow()
+	}
+
+	suite.Equal(
+		suite.jobId01.MustGoogle().String(),
+		jobId.MustGoogle().String(),
+		"job id expected",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0037_GetEventCreated_Job01() {
+	event := new(events.JobCreated)
+	suite.getEvent(suite.eventsJobCreated, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId01,
+		},
+		event.Id,
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0038_GetBatchEvent_Job01Created() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "1 jobs")
+	suite.Equal(uint32(1), event.PendingCount, "1 pending")
+	suite.Equal(uint32(0), event.RunningCount, "no running")
+	suite.Equal(uint32(0), event.CompletedCount, "no completed")
+	suite.Equal(uint32(0), event.CancelledCount, "no cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "no successes")
+	suite.Equal(uint32(0), event.FailureCount, "no failures")
+	suite.Equal(float32(0.0), event.Progress, "progress: 0.0")
+}
+
 func (suite *LucyBatchUnarySuite) Test0040_GetBatch_JobPending() {
 	batch := suite.getBatch()
 
@@ -297,8 +667,8 @@ func (suite *LucyBatchUnarySuite) Test0040_GetBatch_JobPending() {
 		"modified equals created",
 	)
 
-	suite.Equal(uint32(1), batch.JobCount, "no jobs")
-	suite.Equal(uint32(1), batch.PendingCount, "no pending")
+	suite.Equal(uint32(1), batch.JobCount, "1 jobs")
+	suite.Equal(uint32(1), batch.PendingCount, "1 pending")
 	suite.Equal(uint32(0), batch.RunningCount, "no running")
 	suite.Equal(uint32(0), batch.CompletedCount, "no completed")
 	suite.Equal(uint32(0), batch.CancelledCount, "no cancelled")
@@ -355,6 +725,59 @@ func (suite *LucyBatchUnarySuite) Test0060_StartStage() {
 	if !suite.NoError(err, "start stage") {
 		suite.FailNow("failed to start stage 0")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0065_GetStageStartEvent() {
+	event := new(events.StageStart)
+	_, _ = suite.getEvent(suite.eventsStageStarted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal("testworker", event.RunBy, "run_by")
+	suite.Equal(uint32(1), event.RunCount, "run_count")
+}
+
+func (suite *LucyBatchUnarySuite) Test0066_GetJobStartEvent() {
+	event := new(events.JobStart)
+	_, _ = suite.getEvent(suite.eventsJobStarted, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId01,
+		},
+		event.Id,
+	)
+
+	suite.Equal("testworker", event.RunBy, "run_by")
+	suite.Equal(uint32(1), event.RunCount, "run_count")
+}
+
+func (suite *LucyBatchUnarySuite) Test0067_GetBatchEvent_Stage01Started() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "1 jobs")
+	suite.Equal(uint32(0), event.PendingCount, "no pending")
+	suite.Equal(uint32(1), event.RunningCount, "1 running")
+	suite.Equal(uint32(0), event.CompletedCount, "no completed")
+	suite.Equal(uint32(0), event.CancelledCount, "no cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "no successes")
+	suite.Equal(uint32(0), event.FailureCount, "no failures")
+	suite.Equal(float32(0.0), event.Progress, "progress: 0.0")
 }
 
 func (suite *LucyBatchUnarySuite) Test0070_GetJob_Started() {
@@ -419,6 +842,57 @@ func (suite *LucyBatchUnarySuite) Test0090_ProgressStage() {
 	if !suite.NoError(err, "update progress") {
 		suite.FailNow("could not update progress")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0095_GetProgressStageEvent() {
+	event := new(events.StageProgress)
+	_, _ = suite.getEvent(suite.eventsStageProgressed, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.5), event.Progress)
+}
+
+func (suite *LucyBatchUnarySuite) Test0096_GetBatchEvent_Stage01Progressed() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(1), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.25), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0096_GetProgressJobEvent() {
+	event := new(events.JobProgress)
+	_, _ = suite.getEvent(suite.eventsJobProgressed, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId01,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.25), event.Progress)
 }
 
 func (suite *LucyBatchUnarySuite) Test0100_GetJob_Progressing() {
@@ -491,6 +965,42 @@ func (suite *LucyBatchUnarySuite) Test0120_CompleteStage_Success() {
 	}
 }
 
+func (suite *LucyBatchUnarySuite) Test0125_GetCompleteStageEvent() {
+	event := new(events.StageComplete)
+	_, _ = suite.getEvent(suite.eventsStageCompleted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal(lucy.Result_SUCCEEDED, event.Result)
+}
+
+func (suite *LucyBatchUnarySuite) Test0126_GetBatchEvent_Stage01Completed() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(1), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.50), event.Progress, "progress")
+}
+
 func (suite *LucyBatchUnarySuite) checkStageCompleted(stage *lucy.JobStage) {
 	suite.NotNil(stage.Started, "started not nil")
 	suite.NotNil(stage.Completed, "completed not nil")
@@ -560,6 +1070,22 @@ func (suite *LucyBatchUnarySuite) Test0140_StartStage2() {
 	}
 }
 
+func (suite *LucyBatchUnarySuite) Test0145_GetStartStage02Event() {
+	event := new(events.StageStart)
+	_, _ = suite.getEvent(suite.eventsStageStarted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 1,
+		},
+		event.Id,
+	)
+
+	suite.Equal("testworker", event.RunBy)
+}
+
 func (suite *LucyBatchUnarySuite) Test0150_GetJob_Started_Stage02() {
 	job := suite.getJob(suite.jobId01)
 
@@ -621,6 +1147,57 @@ func (suite *LucyBatchUnarySuite) Test0170_ProgressStage() {
 	if !suite.NoError(err, "update progress") {
 		suite.FailNow("could not update progress")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0175_GetProgressEvent_Stage02() {
+	event := new(events.StageProgress)
+	_, _ = suite.getEvent(suite.eventsStageProgressed, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 1,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.5), event.Progress)
+}
+
+func (suite *LucyBatchUnarySuite) Test0176_GetBatchEvent_Stage02Progressed() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(1), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.75), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0176_GetProgressJobEvent_Stage02() {
+	event := new(events.JobProgress)
+	_, _ = suite.getEvent(suite.eventsJobProgressed, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId01,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.75), event.Progress)
 }
 
 func (suite *LucyBatchUnarySuite) Test0180_GetJob_Progressing_Stage02() {
@@ -692,6 +1269,57 @@ func (suite *LucyBatchUnarySuite) Test0200_CompleteStage_Success_Stage02() {
 	}
 }
 
+func (suite *LucyBatchUnarySuite) Test0205_GetCompleteStage02Event() {
+	event := new(events.StageComplete)
+	_, _ = suite.getEvent(suite.eventsStageCompleted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId01,
+			StageIndex: 1,
+		},
+		event.Id,
+	)
+
+	suite.Equal(lucy.Result_SUCCEEDED, event.Result)
+}
+
+func (suite *LucyBatchUnarySuite) Test0206_GetCompleteJobEvent_Job01() {
+	event := new(events.JobComplete)
+	_, _ = suite.getEvent(suite.eventsJobCompleted, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId01,
+		},
+		event.Id,
+	)
+
+	suite.Equal(lucy.Result_SUCCEEDED, event.Result)
+}
+
+func (suite *LucyBatchUnarySuite) Test0207_GetBatchEvent_Job01Success() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(1), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(1), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(1.0), event.Progress, "progress")
+}
+
 func (suite *LucyBatchUnarySuite) Test0210_GetJob_Completed() {
 	job := suite.getJob(suite.jobId01)
 
@@ -753,6 +1381,53 @@ func (suite *LucyBatchUnarySuite) Test0220_AddJobToBatch() {
 	suite.jobId02 = created.Ids[0]
 }
 
+func (suite *LucyBatchUnarySuite) Test0225_GetMessageFromWorkerQueue_Job02() {
+	message := suite.amqp.GetMessage(messaging.WorkerQueueName(
+		"SortStudent"), true,
+	)
+
+	jobId := new(cerealMessages.UUID)
+	err := proto.Unmarshal(message.Body, jobId)
+	if !suite.NoError(err, "unmarshal job id") {
+		suite.T().FailNow()
+	}
+
+	suite.Equal(suite.jobId02.MustGoogle(), jobId.MustGoogle(), "job id")
+}
+
+func (suite *LucyBatchUnarySuite) Test0226_Batch01_GetEvent_Job02Added() {
+	event := new(events.JobCreated)
+	_, _ = suite.getEvent(suite.eventsJobCreated, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId02,
+		},
+		event.Id,
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0227_GetBatchEvent_Job02Added() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(1), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(1), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.5), event.Progress, "progress")
+}
+
 func (suite *LucyBatchUnarySuite) Test0230_GetBatch_Job02Pending() {
 	batch := suite.getBatch()
 
@@ -812,6 +1487,58 @@ func (suite *LucyBatchUnarySuite) Test0250_StartStage01_Job02() {
 	if !suite.NoError(err, "start stage") {
 		suite.FailNow("failed to start stage 0")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0255_GetStartStage01Event_Job02() {
+	event := new(events.StageStart)
+	_, _ = suite.getEvent(suite.eventsStageStarted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId02,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal("testworker", event.RunBy)
+}
+
+func (suite *LucyBatchUnarySuite) Test0256_GetJobStartEvent_Job02() {
+	event := new(events.JobStart)
+	_, _ = suite.getEvent(suite.eventsJobStarted, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId02,
+		},
+		event.Id,
+	)
+
+	suite.Equal("testworker", event.RunBy, "run_by")
+	suite.Equal(uint32(1), event.RunCount, "run_count")
+}
+
+func (suite *LucyBatchUnarySuite) Test0257_GetBatchEvent_Job02Started() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(1), event.RunningCount, "running")
+	suite.Equal(uint32(1), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.5), event.Progress, "progress")
 }
 
 func (suite *LucyBatchUnarySuite) Test0260_GetJob02_Started() {
@@ -876,6 +1603,57 @@ func (suite *LucyBatchUnarySuite) Test0280_ProgressStage_Job02() {
 	if !suite.NoError(err, "update progress") {
 		suite.FailNow("could not update progress")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0285_GetProgressStageEvent_Job02() {
+	event := new(events.StageProgress)
+	_, _ = suite.getEvent(suite.eventsStageProgressed, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId02,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.5), event.Progress)
+}
+
+func (suite *LucyBatchUnarySuite) Test0286_GetProgressJobEvent_Job02() {
+	event := new(events.JobProgress)
+	_, _ = suite.getEvent(suite.eventsJobProgressed, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId02,
+		},
+		event.Id,
+	)
+
+	suite.Equal(float32(0.25), event.Progress)
+}
+
+func (suite *LucyBatchUnarySuite) Test0287_GetBatchEvent_Job02Progressed() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(1), event.RunningCount, "running")
+	suite.Equal(uint32(1), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0.625), event.Progress, "progress")
 }
 
 func (suite *LucyBatchUnarySuite) Test0290_GetJob02_Progressing() {
@@ -951,6 +1729,57 @@ func (suite *LucyBatchUnarySuite) Test0310_CompleteStage_Failed_Job02() {
 	if !suite.NoError(err, "update progress") {
 		suite.FailNow("could not update progress")
 	}
+}
+
+func (suite *LucyBatchUnarySuite) Test0315_GetCompleteStageEvent_Job02() {
+	event := new(events.StageComplete)
+	_, _ = suite.getEvent(suite.eventsStageCompleted, event, true)
+
+	suite.checkEventStageId(
+		&events.StageId{
+			BatchId:    suite.batchId,
+			JobId:      suite.jobId02,
+			StageIndex: 0,
+		},
+		event.Id,
+	)
+
+	suite.Equal(lucy.Result_FAILED, event.Result)
+}
+
+func (suite *LucyBatchUnarySuite) Test0316_GetCompleteJobEvent_Job02_Failed() {
+	event := new(events.JobComplete)
+	_, _ = suite.getEvent(suite.eventsJobCompleted, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batchId,
+			JobId:   suite.jobId02,
+		},
+		event.Id,
+	)
+
+	suite.Equal(lucy.Result_FAILED, event.Result)
+}
+
+func (suite *LucyBatchUnarySuite) Test0317_GetBatchEvent_Job02Failed() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(2), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(1), event.FailureCount, "failures")
+	suite.Equal(float32(0.625), event.Progress, "progress")
 }
 
 func (suite *LucyBatchUnarySuite) Test0320_GetJob_Failed_Job02() {
@@ -1051,6 +1880,43 @@ func (suite *LucyBatchUnarySuite) Test0331_Cancel_CompletedBatch() {
 	suite.NotNil(jobs.Jobs[1].Stages[0].Error, "error not nil")
 }
 
+func (suite *LucyBatchUnarySuite) Test0332_GetBatchEvent_JobCancelled() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(1), event.CompletedCount, "completed")
+	suite.Equal(uint32(1), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(1), event.SuccessCount, "successes")
+	suite.Equal(uint32(1), event.FailureCount, "failures")
+	suite.Equal(float32(0.625), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0333_GetJobEvent_JobCancelled() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCancelled, event, true)
+
+	suite.Equal(
+		suite.batchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.jobId02.MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
 func (suite *LucyBatchUnarySuite) Test0340_CreateBatch02_MultiJob() {
 	batch := &lucy.NewBatch{
 		Type:        "SortStudents",
@@ -1068,15 +1934,72 @@ func (suite *LucyBatchUnarySuite) Test0340_CreateBatch02_MultiJob() {
 	if !suite.NoError(err, "error creating batch") {
 		suite.T().FailNow()
 	}
-	suite.batchId02 = created.BatchId
-	fmt.Println("ID:", suite.batchId02.MustGoogle())
+	suite.batch02Created = created
+	fmt.Println("ID:", suite.batch02Created.BatchId.MustGoogle())
+}
+
+func (suite *LucyBatchUnarySuite) Test0341_Batch02_GetEvent_Created() {
+	event := new(events.BatchCreated)
+	_, _ = suite.getEvent(suite.eventsBatchCreated, event, true)
+
+	suite.Equal(
+		suite.batch02Created.BatchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0342_Batch02_GetEvents_JobCreated01() {
+	event := new(events.JobCreated)
+	_, _ = suite.getEvent(suite.eventsJobCreated, event, false)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batch02Created.BatchId,
+			JobId:   suite.batch02Created.JobIds[0],
+		},
+		event.Id,
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0343_Batch02_GetEvents_JobCreated02() {
+	event := new(events.JobCreated)
+	_, _ = suite.getEvent(suite.eventsJobCreated, event, true)
+
+	suite.checkEventJobId(
+		&events.JobId{
+			BatchId: suite.batch02Created.BatchId,
+			JobId:   suite.batch02Created.JobIds[1],
+		},
+		event.Id,
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0344_GetBatchEvent_Batch02JobsAdded() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batch02Created.BatchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(2), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0), event.Progress, "progress")
 }
 
 func (suite *LucyBatchUnarySuite) Test0345_GetBatch02_MultiJob() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
-	batch, err := suite.client.GetBatch(ctx, suite.batchId02)
+	batch, err := suite.client.GetBatch(ctx, suite.batch02Created.BatchId)
 	if !suite.NoError(err, "get batch") {
 		suite.T().FailNow()
 	}
@@ -1086,6 +2009,44 @@ func (suite *LucyBatchUnarySuite) Test0345_GetBatch02_MultiJob() {
 	}
 }
 
+func (suite *LucyBatchUnarySuite) Test0347_GetBatch02_WorkQueueMessages() {
+	msg := suite.amqp.GetMessage(
+		messaging.WorkerQueueName("SortStudent"), true,
+	)
+
+	jobIds := make([]string, 0)
+
+	jobId := new(cerealMessages.UUID)
+	err := proto.Unmarshal(msg.Body, jobId)
+	if !suite.NoError(err, "unmarshal job 1 id") {
+		suite.T().FailNow()
+	}
+	jobIds = append(jobIds, jobId.MustGoogle().String())
+
+	msg = suite.amqp.GetMessage(
+		messaging.WorkerQueueName("SortStudent"), true,
+	)
+
+	jobId2 := new(cerealMessages.UUID)
+	err = proto.Unmarshal(msg.Body, jobId2)
+	if !suite.NoError(err, "unmarshal job 1 id") {
+		suite.T().FailNow()
+	}
+	jobIds = append(jobIds, jobId2.MustGoogle().String())
+
+	suite.Contains(
+		jobIds,
+		suite.batch02Created.JobIds[0].MustGoogle().String(),
+		"job 1 id",
+	)
+
+	suite.Contains(
+		jobIds,
+		suite.batch02Created.JobIds[1].MustGoogle().String(),
+		"job 2 id",
+	)
+}
+
 func (suite *LucyBatchUnarySuite) Test0350_CancelBatch() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
@@ -1093,7 +2054,7 @@ func (suite *LucyBatchUnarySuite) Test0350_CancelBatch() {
 	_, err := suite.client.CancelBatches(
 		ctx,
 		&lucy.CancelBatches{
-			BatchIds: []*cerealMessages.UUID{suite.batchId02},
+			BatchIds: []*cerealMessages.UUID{suite.batch02Created.BatchId},
 		},
 	)
 	if !suite.NoError(err, "cancel batch") {
@@ -1101,11 +2062,65 @@ func (suite *LucyBatchUnarySuite) Test0350_CancelBatch() {
 	}
 }
 
+func (suite *LucyBatchUnarySuite) Test0351_GetBatchEvent_Batch02Cancelled() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batch02Created.BatchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(0), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(2), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0352_GetJobEvent_Batch02Job01_Cancelled() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCancelled, event, false)
+
+	suite.Equal(
+		suite.batch02Created.BatchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.batch02Created.JobIds[0].MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0352_GetJobEvent_Batch02Job02_Cancelled() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCancelled, event, true)
+
+	suite.Equal(
+		suite.batch02Created.BatchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.batch02Created.JobIds[1].MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
 func (suite *LucyBatchUnarySuite) Test0360_GetBatch02_Cancelled() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
-	batch, err := suite.client.GetBatch(ctx, suite.batchId02)
+	batch, err := suite.client.GetBatch(ctx, suite.batch02Created.BatchId)
 	if !suite.NoError(err, "get cancelled batch") {
 		suite.T().FailNow()
 	}
@@ -1124,7 +2139,7 @@ func (suite *LucyBatchUnarySuite) Test0370_GetJobs_Cancelled() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
-	jobs, err := suite.client.GetBatchJobs(ctx, suite.batchId02)
+	jobs, err := suite.client.GetBatchJobs(ctx, suite.batch02Created.BatchId)
 	if !suite.NoError(err, "get cancelled batch jobs") {
 		suite.T().FailNow()
 	}
@@ -1166,14 +2181,110 @@ func (suite *LucyBatchUnarySuite) Test0380_CancelJob() {
 		suite.T().FailNow()
 	}
 
-	suite.batchId03 = created.BatchId
+	suite.batch03Created = created
 
 	_, err = suite.client.CancelJob(ctx, created.JobIds[0])
 	if !suite.NoError(err, "cancel first job") {
 		suite.T().FailNow()
 	}
+}
 
-	jobs, err := suite.client.GetBatchJobs(ctx, created.BatchId)
+func (suite *LucyBatchUnarySuite) Test0381_GetBatchEvent_Batch03Created() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, false)
+
+	suite.Equal(
+		suite.batch03Created.BatchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(2), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(0), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0382_GetBatchEvent_Batch03Cancelled() {
+	event := new(events.BatchUpdated)
+	suite.getEvent(suite.eventsBatchUpdated, event, true)
+
+	suite.Equal(
+		suite.batch03Created.BatchId.MustGoogle().String(),
+		event.Id.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(uint32(2), event.JobCount, "jobs")
+	suite.Equal(uint32(1), event.PendingCount, "pending")
+	suite.Equal(uint32(0), event.RunningCount, "running")
+	suite.Equal(uint32(0), event.CompletedCount, "completed")
+	suite.Equal(uint32(1), event.CancelledCount, "cancelled")
+	suite.Equal(uint32(0), event.SuccessCount, "successes")
+	suite.Equal(uint32(0), event.FailureCount, "failures")
+	suite.Equal(float32(0), event.Progress, "progress")
+}
+
+func (suite *LucyBatchUnarySuite) Test0383_GetJobEvent_Batch03Job01_Created() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCreated, event, false)
+
+	suite.Equal(
+		suite.batch03Created.BatchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.batch03Created.JobIds[0].MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0384_GetJobEvent_Batch03Job02_Created() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCreated, event, true)
+
+	suite.Equal(
+		suite.batch03Created.BatchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.batch03Created.JobIds[1].MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0385_GetJobEvent_Batch03Job01_Cancelled() {
+	event := new(events.JobCancelled)
+	suite.getEvent(suite.eventsJobCancelled, event, true)
+
+	suite.Equal(
+		suite.batch03Created.BatchId.MustGoogle().String(),
+		event.Id.BatchId.MustGoogle().String(),
+		"batch id",
+	)
+
+	suite.Equal(
+		suite.batch03Created.JobIds[0].MustGoogle().String(),
+		event.Id.JobId.MustGoogle().String(),
+		"job id",
+	)
+}
+
+func (suite *LucyBatchUnarySuite) Test0386_GetBatch03_CancelledJob() {
+	ctx, cancel := pktesting.New3SecondCtx()
+	defer cancel()
+
+	jobs, err := suite.client.GetBatchJobs(ctx, suite.batch03Created.BatchId)
 	if !suite.NoError(err, "get batch jobs") {
 		suite.T().FailNow()
 	}
@@ -1206,8 +2317,8 @@ func (suite *LucyBatchUnarySuite) Test0390_ListBatches() {
 	}
 
 	expectedBatchIds := []*cerealMessages.UUID{
-		suite.batchId03,
-		suite.batchId02,
+		suite.batch03Created.BatchId,
+		suite.batch02Created.BatchId,
 		suite.batchId,
 	}
 
@@ -1239,7 +2350,9 @@ func (suite *LucyBatchUnarySuite) Test0390_ListBatches() {
 }
 
 func TestLucyBatchUnarySuite(t *testing.T) {
-	suite.Run(t, new(LucyBatchUnarySuite))
+	suite.Run(t, &LucyBatchUnarySuite{
+		lucySuite: newLucySuite(),
+	})
 }
 
 // ClientRunnerMock implements the lucy.LucyClient interface, but uses a
@@ -1428,11 +2541,15 @@ func (suite *LucyBatchStreamSuite) TearDownSuite() {
 	if !suite.NoError(err, "Runner.CloseSend()") {
 		suite.FailNow("could not close update stream")
 	}
-	suite.ManagerSuite.TearDownSuite()
+	suite.lucySuite.TearDownSuite()
 }
 
 func TestLucyBatchStreamSuite(t *testing.T) {
-	suite.Run(t, new(LucyBatchStreamSuite))
+	suite.Run(t, &LucyBatchStreamSuite{
+		LucyBatchUnarySuite: LucyBatchUnarySuite{
+			lucySuite: newLucySuite(),
+		},
+	})
 }
 
 type LucyErrorsSuite struct {
@@ -1774,7 +2891,9 @@ func (suite *LucyErrorsSuite) Test0100_UpdateJob_MaxRetries() {
 }
 
 func TestLucyErrorsSuite(t *testing.T) {
-	suite.Run(t, new(LucyErrorsSuite))
+	suite.Run(t, &LucyErrorsSuite{
+		lucySuite: newLucySuite(),
+	})
 }
 
 type LucyErrorStreamSuite struct {
@@ -1804,9 +2923,13 @@ func (suite *LucyErrorStreamSuite) TearDownSuite() {
 	if !suite.NoError(err, "Runner.CloseSend()") {
 		suite.FailNow("could not close update stream")
 	}
-	suite.ManagerSuite.TearDownSuite()
+	suite.lucySuite.TearDownSuite()
 }
 
 func TestLucyErrorStreamSuite(t *testing.T) {
-	suite.Run(t, new(LucyErrorStreamSuite))
+	suite.Run(t, &LucyErrorStreamSuite{
+		LucyErrorsSuite: LucyErrorsSuite{
+			lucySuite: newLucySuite(),
+		},
+	})
 }

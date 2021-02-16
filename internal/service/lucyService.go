@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
-	"github.com/peake100/lucy-go/lucy"
-	"github.com/peake100/lucy-go/service/lucydb"
+	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/messaging"
+	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/grpc"
@@ -16,7 +17,9 @@ import (
 // Lucy implements lucy.LucyServer and pkservices.GrpcService
 type Lucy struct {
 	// db holds the mongo client and collections for lucy.
-	db lucydb.LucyDB
+	db db.LucyDB
+	// messenger is used to queue jobs and fre events.
+	messenger messaging.LucyMessenger
 	// errs is the error generator for lucy.
 	errs *pkerr.ErrorGenerator
 }
@@ -35,9 +38,9 @@ func (service *Lucy) Setup(
 	shutdownCtx context.Context,
 	logger zerolog.Logger,
 ) (err error) {
-	service.db, err = lucydb.Connect(resourcesCtx)
+	service.db, err = db.Connect(resourcesCtx)
 	if err != nil {
-		return err
+		return fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	resourcesReleased.Add(1)
@@ -45,6 +48,18 @@ func (service *Lucy) Setup(
 		defer resourcesReleased.Done()
 		defer service.db.Client.Disconnect(shutdownCtx)
 		<-resourcesCtx.Done()
+	}()
+
+	service.messenger = messaging.NewMessenger()
+	err = service.messenger.Setup(resourcesCtx, logger)
+	if err != nil {
+		return fmt.Errorf("error setting up messenger: %w", err)
+	}
+
+	resourcesReleased.Add(1)
+	go func() {
+		defer resourcesReleased.Done()
+		_ = service.messenger.Run(resourcesCtx)
 	}()
 
 	return nil
