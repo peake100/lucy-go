@@ -11,8 +11,6 @@ import (
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 	"github.com/peake100/rogerRabbit-go/roger"
 	"github.com/rs/zerolog"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"sync"
 )
@@ -21,22 +19,24 @@ import (
 func (service Lucy) CreateJobs(
 	ctx context.Context, jobs *lucy.NewJobs,
 ) (created *lucy.CreatedJobs, err error) {
-	// We're going to update the db and declare job queues concurrently.
+	// We're going to update the dbMongo and declare job queues concurrently.
 	logger := pkmiddleware.LoggerFromCtx(ctx)
 	dbResult := make(chan error, 1)
 	declareQueuesResult := make(chan error, 1)
-	var updatedData batchInfoUpdatedResult
+	var updatedData db.ResultBatchSummaries
 
 	go func() {
-		createdInfo, batchInfo, dbErr := service.createJobsUpdateDBBatchRecord(
+		createdInfo, dbErr := service.db.CreateJobs(
 			ctx, jobs,
 		)
-		created = createdInfo
 		if dbErr != nil {
 			dbResult <- dbErr
 			return
 		}
-		updatedData = batchInfo
+
+		created = createdInfo.Jobs
+
+		updatedData = createdInfo.BatchSummaries
 		dbResult <- nil
 	}()
 
@@ -47,10 +47,10 @@ func (service Lucy) CreateJobs(
 	select {
 	case err = <-dbResult:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("db upadate interrupted: %w", err)
+		return nil, fmt.Errorf("dbMongo upadate interrupted: %w", err)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("error upating db record: %w", err)
+		return nil, fmt.Errorf("error upating dbMongo record: %w", err)
 	}
 
 	select {
@@ -78,21 +78,7 @@ func (service Lucy) CreateJobs(
 	return created, nil
 }
 
-// createJobProjection is the projection we will apply to job creation.
-var createJobProjection = db.MustCompileStaticDocument(m{
-	"id":              1,
-	"modified":        1,
-	"progress":        1,
-	"job_count":       1,
-	"pending_count":   1,
-	"cancelled_count": 1,
-	"running_count":   1,
-	"completed_count": 1,
-	"success_count":   1,
-	"failure_count":   1,
-})
-
-// batchInfoUpdatedResult stores the batch-summary level info from a db update.
+// batchInfoUpdatedResult stores the batch-summary level info from a dbMongo update.
 type batchInfoUpdatedResult struct {
 	BatchId        *cerealMessages.UUID   `bson:"id"`
 	Modified       *timestamppb.Timestamp `bson:"modified"`
@@ -104,52 +90,6 @@ type batchInfoUpdatedResult struct {
 	CompletedCount uint32                 `bson:"completed_count"`
 	SuccessCount   uint32                 `bson:"success_count"`
 	FailureCount   uint32                 `bson:"failure_count"`
-}
-
-// createJobsUpdateDBBatchRecord updates the batch record in the db with the new jobs
-func (service Lucy) createJobsUpdateDBBatchRecord(
-	ctx context.Context, jobs *lucy.NewJobs,
-) (*lucy.CreatedJobs, batchInfoUpdatedResult, error) {
-	// CurrentUpdate the batch.
-	filter := bson.M{"id": jobs.Batch}
-
-	// We need to keep track of the job id's we make so we return them in the same
-	// jobQueueOrder that the jobs were sent.
-	jobIds := make([]*cerealMessages.UUID, len(jobs.Jobs))
-	for i := range jobs.Jobs {
-		recordId, err := db.NewRecordId()
-		if err != nil {
-			return nil, batchInfoUpdatedResult{}, fmt.Errorf(
-				"error creating record: %w", err,
-			)
-		}
-		jobIds[i] = recordId
-	}
-
-	// Create the update pipeline for adding the jobs to the batch record.
-	updatePipeline := db.CreateAddJobPipeline(jobs, jobIds)
-
-	// Return an emtpy record.
-	opts := new(options.FindOneAndUpdateOptions).
-		SetProjection(createJobProjection).
-		SetReturnDocument(options.After)
-
-	result := service.db.Jobs.FindOneAndUpdate(ctx, filter, updatePipeline, opts)
-	err := service.CheckMongoErr(result.Err(), "batch id not found")
-	if err != nil {
-		return nil, batchInfoUpdatedResult{}, err
-	}
-
-	created := &lucy.CreatedJobs{Ids: jobIds}
-	batchInfo := batchInfoUpdatedResult{}
-	err = result.Decode(&batchInfo)
-	if err != nil {
-		return nil, batchInfoUpdatedResult{}, fmt.Errorf(
-			"error decoding return document: %w", err,
-		)
-	}
-
-	return created, batchInfo, nil
 }
 
 // createJobsDeclareWorkerQueues declares and binds queues on the message broker for the
@@ -205,7 +145,7 @@ func (service Lucy) createJobsDeclareWorkerQueues(
 func (service Lucy) createJobsSendEvents(
 	batchId *cerealMessages.UUID,
 	created *lucy.CreatedJobs,
-	updatedData batchInfoUpdatedResult,
+	updatedData db.ResultBatchSummaries,
 	logger zerolog.Logger,
 ) {
 	// Iterate over each job id and create an event for it.

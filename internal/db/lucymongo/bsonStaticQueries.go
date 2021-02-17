@@ -1,4 +1,4 @@
-package db
+package lucymongo
 
 import (
 	"github.com/peake100/lucy-go/pkg/lucy"

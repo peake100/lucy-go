@@ -9,7 +9,7 @@ import (
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pktesting"
-	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/db/lucymongo"
 	"github.com/peake100/lucy-go/internal/messaging"
 	"github.com/peake100/lucy-go/internal/prototesting"
 	"github.com/peake100/lucy-go/internal/service"
@@ -32,7 +32,7 @@ import (
 )
 
 func init() {
-	os.Setenv(db.EnvKeyMongoURI, "mongodb://127.0.0.1:57017")
+	os.Setenv(lucymongo.EnvKeyMongoURI, "mongodb://127.0.0.1:57017")
 	os.Setenv(messaging.EnvKeyRabbitURI, "amqp://127.0.0.1:57018")
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
@@ -53,7 +53,7 @@ type lucySuite struct {
 	// manager holds helper methods that invoke our base suite.
 	manager pktesting.ManagerSuite
 
-	db     db.LucyDB
+	db     lucymongo.Backend
 	client lucy.LucyClient
 
 	// eventQueueJobCreated is a queue that is declared and bound to the job creation
@@ -76,14 +76,15 @@ type lucySuite struct {
 }
 
 func (suite *lucySuite) SetupSuite() {
-	// get the db connector
+	// get the dbMongo connector
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
 	var err error
-	suite.db, err = db.Connect(ctx)
-	if !suite.NoError(err, "connect to db") {
-		suite.FailNow("could not connect to db")
+	db, err := lucymongo.New(ctx, nil)
+	suite.db = db.(lucymongo.Backend)
+	if !suite.NoError(err, "connect to dbMongo") {
+		suite.FailNow("could not connect to dbMongo")
 	}
 
 	// Drop the lucy database

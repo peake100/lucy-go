@@ -15,7 +15,7 @@ import (
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pkmiddleware"
-	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/db/lucymongo"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 	"github.com/rs/zerolog"
@@ -140,7 +140,7 @@ func (updated updatedBatchRaw) ExtractUpdateInfo(
 }
 
 // updateProjection is the projection we will apply to stage update results.
-var updateProjection = db.MustCompileStaticDocument(m{
+var updateProjection = lucymongo.MustCompileStaticDocument(m{
 	"id":                    1,
 	"modified":              1,
 	"progress":              1,
@@ -221,7 +221,7 @@ func newStageUpdate(
 		filter = append(filter, maxRetriesConstraint)
 	}
 
-	pipeline := db.CreateStageUpdatePipeline(stageId, update, timeField)
+	pipeline := lucymongo.CreateStageUpdatePipeline(stageId, update, timeField)
 	updateInfo := stageUpdate{
 		Req:            req,
 		StageId:        stageId,
@@ -262,7 +262,7 @@ func (service Lucy) updateJobStageExecuteDBRequest(
 		SetProjection(updateProjection).
 		SetReturnDocument(options.After)
 
-	result := service.db.Jobs.FindOneAndUpdate(
+	result := service.dbMongo.Jobs.FindOneAndUpdate(
 		ctx, update.Filter, update.Pipeline, opts,
 	)
 
@@ -305,7 +305,7 @@ func (service Lucy) investigateStageUpdateErr(
 	for i := 0; i < 3; i++ {
 		// Extract the status.
 		findOpts := options.FindOne().SetProjection(m{"jobs.$": 1})
-		findResult := service.db.Jobs.FindOne(ctx, update.Filter, findOpts)
+		findResult := service.dbMongo.Jobs.FindOne(ctx, update.Filter, findOpts)
 		err = findResult.Err()
 
 		// If there was no error once we remove the status check, that means the stage
@@ -474,7 +474,9 @@ func (service Lucy) StartStage(
 		Result:           lucy.Result_NONE,
 		ResultData:       nil,
 		Error:            nil,
-		RunCount:         m{"$add": arr{"$" + db.TempStageField + ".run_count", 1}},
+		RunCount:         m{
+			"$add": arr{"$" + lucymongo.TempStageField + ".run_count", 1},
+		},
 	}
 
 	update := newStageUpdate(

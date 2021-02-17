@@ -9,154 +9,84 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
-	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pkmiddleware"
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 	"github.com/rs/zerolog"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// cancelBatchMongoPipeline is the UpdateMany pipeline to cancel a job.
-var cancelBatchMongoPipeline = db.MustCompileStaticPipeline(
-	db.CancelJobsPipeline(nil),
-)
-
-var cancelBatchProjection = db.MustCompileStaticDocument(m{
-	// Top-level fields.
-	"id":              1,
-	"modified":        1,
-	"progress":        1,
-	"run_count":       1,
-	"job_count":       1,
-	"pending_count":   1,
-	"cancelled_count": 1,
-	"running_count":   1,
-	"completed_count": 1,
-	"success_count":   1,
-	"failure_count":   1,
-	// Jobs fields
-	"jobs.id":     1,
-	"jobs.status": 1,
-})
-
 func (service Lucy) CancelBatches(
 	ctx context.Context, batches *lucy.CancelBatches,
 ) (*empty.Empty, error) {
-	filter := m{"id": m{"$in": batches.BatchIds}}
-	update := cancelBatchMongoPipeline
-
-	result, err := service.db.Jobs.UpdateMany(ctx, filter, update)
+	cursor, err := service.db.CancelBatches(ctx, batches)
 	if err != nil {
-		return nil, fmt.Errorf("error running cancellation pipeline: %w", err)
-	}
-
-	batchesRequested := int64(len(batches.BatchIds))
-	if result.MatchedCount != batchesRequested {
-		return nil, service.errs.NewErr(
-			pkerr.ErrNotFound,
-			fmt.Sprintf(
-				"%v batches found and cancelled, %v batches could not be found",
-				result.MatchedCount,
-				batchesRequested,
-			),
-			nil,
-			nil,
-		)
+		return nil, err
 	}
 
 	logger := pkmiddleware.LoggerFromCtx(ctx)
-	service.cancelBatchFireEvents(batches.BatchIds, logger)
+	service.cancelBatchFireEvents(ctx, cursor, logger)
 
 	return emptyResponse, nil
 }
 
 func (service Lucy) cancelBatchFireEvents(
-	batchIds []*cerealMessages.UUID, logger zerolog.Logger,
+	ctx context.Context, cursor db.CancelBatchResultsCursor, logger zerolog.Logger,
 ) {
 	// Launch a routine to create cancellation events for each batch.
-	for _, thisBatchId := range batchIds {
-		go service.cancelBatchFireBatchUpdateEvent(thisBatchId, logger)
+	for {
+		batchInfo, err := cursor.Next(ctx)
+		if err != nil {
+			logger.Error().
+				Err(fmt.Errorf(
+					"error fetching batch info from db cursor: %w", err,
+				)).
+				Msg("error sending batch cancelled events")
+			return
+		}
+		go service.cancelBatchFireBatchUpdateEvent(batchInfo, logger)
 	}
 }
-
-var cancelJobProjection = db.MustCompileStaticDocument(m{
-	"id":              1,
-	"modified":        1,
-	"progress":        1,
-	"run_count":       1,
-	"job_count":       1,
-	"pending_count":   1,
-	"cancelled_count": 1,
-	"running_count":   1,
-	"completed_count": 1,
-	"success_count":   1,
-	"failure_count":   1,
-})
 
 func (service Lucy) CancelJob(
 	ctx context.Context, job *cerealMessages.UUID,
 ) (*empty.Empty, error) {
-	filter := m{"jobs.id": job}
-	update := db.CancelJobsPipeline(job)
-
-	opts := options.FindOneAndUpdate().
-		SetProjection(cancelJobProjection).
-		SetReturnDocument(options.After)
-
-	result := service.db.Jobs.FindOneAndUpdate(ctx, filter, update, opts)
-	if err := service.CheckMongoErr(result.Err(), ""); err != nil {
+	result, err := service.db.CancelJob(ctx, job)
+	if err != nil {
 		return nil, err
 	}
 
 	logger := pkmiddleware.LoggerFromCtx(ctx)
-	go service.cancelJobFireEvents(job, result, logger)
+	go service.cancelJobFireEvents(job, result.BatchSummaries, logger)
 
 	return new(emptypb.Empty), nil
 }
 
 func (service Lucy) cancelJobFireEvents(
 	jobId *cerealMessages.UUID,
-	batchRecordDecoder documentDecoder,
+	batchInfo db.ResultBatchSummaries,
 	logger zerolog.Logger,
 ) {
-	var err error
-	defer func() {
-		if err == nil {
-			return
-		}
-
-		logger.Error().Err(err).Msg("error building batch cancellation event")
-	}()
-
-	batchData := batchInfoUpdatedResult{}
-	err = batchRecordDecoder.Decode(&batchData)
-	if err != nil {
-		err = fmt.Errorf("error decoding batch record: %w", err)
-		return
-	}
-
 	// TODO: we need to extract the job.modified field here instead of the batch
 	//   modified.
 	service.cancelFireJobEvents(
-		batchData.BatchId, []*cerealMessages.UUID{jobId}, batchData.Modified, logger,
+		batchInfo.BatchId, []*cerealMessages.UUID{jobId}, batchInfo.Modified, logger,
 	)
 
 	// Build the event.
 	event := &events.BatchUpdated{
-		Id:             batchData.BatchId,
-		JobCount:       batchData.JobCount,
-		Progress:       batchData.Progress,
-		PendingCount:   batchData.PendingCount,
-		CancelledCount: batchData.CancelledCount,
-		RunningCount:   batchData.RunningCount,
-		CompletedCount: batchData.CompletedCount,
-		SuccessCount:   batchData.SuccessCount,
-		FailureCount:   batchData.FailureCount,
-		Modified:       batchData.Modified,
+		Id:             batchInfo.BatchId,
+		JobCount:       batchInfo.JobCount,
+		Progress:       batchInfo.Progress,
+		PendingCount:   batchInfo.PendingCount,
+		CancelledCount: batchInfo.CancelledCount,
+		RunningCount:   batchInfo.RunningCount,
+		CompletedCount: batchInfo.CompletedCount,
+		SuccessCount:   batchInfo.SuccessCount,
+		FailureCount:   batchInfo.FailureCount,
+		Modified:       batchInfo.Modified,
 	}
 	service.messenger.QueueBatchUpdated(event, logger)
 }
@@ -181,65 +111,30 @@ func (service Lucy) cancelFireJobEvents(
 }
 
 func (service Lucy) cancelBatchFireBatchUpdateEvent(
-	batchId *cerealMessages.UUID, logger zerolog.Logger,
+	batchInfo db.ResultCancelBatch, logger zerolog.Logger,
 ) {
-	var err error
-	defer func() {
-		if err == nil {
-			return
-		}
-		logger.Error().Err(err).Msg("error building batch cancellation event")
-	}()
-
-	opts := options.FindOne().SetProjection(cancelBatchProjection)
-	result := service.db.Jobs.FindOne(
-		context.Background(), m{"id": batchId}, opts,
-	)
-	if result.Err() != nil {
-		err = fmt.Errorf(
-			"error fetching batch document: %w", result.Err(),
-		)
-		return
-	}
-
-	resultData := struct {
-		Batch batchInfoUpdatedResult `bson:",inline"`
-		Jobs  []struct {
-			Id     *cerealMessages.UUID `bson:"id"`
-			Status lucy.Status          `bson:"status"`
-		} `bson:"jobs"`
-	}{}
-
-	err = result.Decode(&resultData)
-	if err != nil {
-		err = fmt.Errorf("error decoding batch record: %w", err)
-		return
-	}
-
 	// Start a routine to fire the job cancelled events
 	go func() {
-		jobIds := make([]*cerealMessages.UUID, 0, len(resultData.Jobs))
-		for _, thisJob := range resultData.Jobs {
-			if thisJob.Status != lucy.Status_CANCELLED {
-				continue
-			}
-			jobIds = append(jobIds, thisJob.Id)
-		}
-		service.cancelFireJobEvents(batchId, jobIds, resultData.Batch.Modified, logger)
+		service.cancelFireJobEvents(
+			batchInfo.BatchSummaries.BatchId,
+			batchInfo.JobIds,
+			batchInfo.BatchSummaries.Modified,
+			logger,
+		)
 	}()
 
 	// Build the batch update event.
 	event := &events.BatchUpdated{
-		Id:             resultData.Batch.BatchId,
-		JobCount:       resultData.Batch.JobCount,
-		Progress:       resultData.Batch.Progress,
-		PendingCount:   resultData.Batch.PendingCount,
-		CancelledCount: resultData.Batch.CancelledCount,
-		RunningCount:   resultData.Batch.RunningCount,
-		CompletedCount: resultData.Batch.CompletedCount,
-		SuccessCount:   resultData.Batch.SuccessCount,
-		FailureCount:   resultData.Batch.FailureCount,
-		Modified:       resultData.Batch.Modified,
+		Id:             batchInfo.BatchSummaries.BatchId,
+		JobCount:       batchInfo.BatchSummaries.JobCount,
+		Progress:       batchInfo.BatchSummaries.Progress,
+		PendingCount:   batchInfo.BatchSummaries.PendingCount,
+		CancelledCount: batchInfo.BatchSummaries.CancelledCount,
+		RunningCount:   batchInfo.BatchSummaries.RunningCount,
+		CompletedCount: batchInfo.BatchSummaries.CompletedCount,
+		SuccessCount:   batchInfo.BatchSummaries.SuccessCount,
+		FailureCount:   batchInfo.BatchSummaries.FailureCount,
+		Modified:       batchInfo.BatchSummaries.Modified,
 	}
 	service.messenger.QueueBatchUpdated(event, logger)
 }

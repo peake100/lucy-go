@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/db/lucymongo"
 	"github.com/peake100/lucy-go/internal/messaging"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/rs/zerolog"
@@ -16,8 +17,10 @@ import (
 
 // Lucy implements lucy.LucyServer and pkservices.GrpcService
 type Lucy struct {
-	// db holds the mongo client and collections for lucy.
-	db db.LucyDB
+	// db holds the db connection for the service.
+	db db.Connection
+	// dbMongo holds the mongo client and collections for lucy.
+	dbMongo lucymongo.Backend
 	// messenger is used to queue jobs and fre events.
 	messenger messaging.LucyMessenger
 	// errs is the error generator for lucy.
@@ -31,22 +34,24 @@ func (Lucy) Id() string {
 
 // revive:disable:context-as-argument
 
-// Setup implements pkservices.Service and sets up our db and rabbitMQ connections.
+// Setup implements pkservices.Service and sets up our dbMongo and rabbitMQ connections.
 func (service *Lucy) Setup(
 	resourcesCtx context.Context,
 	resourcesReleased *sync.WaitGroup,
 	shutdownCtx context.Context,
 	logger zerolog.Logger,
 ) (err error) {
-	service.db, err = db.Connect(resourcesCtx)
+	service.db, err = lucymongo.New(resourcesCtx, service.errs)
 	if err != nil {
 		return fmt.Errorf("error connecting to database: %w", err)
 	}
 
+	service.dbMongo = service.db.(lucymongo.Backend)
+
 	resourcesReleased.Add(1)
 	go func() {
 		defer resourcesReleased.Done()
-		defer service.db.Client.Disconnect(shutdownCtx)
+		defer service.dbMongo.Client.Disconnect(shutdownCtx)
 		<-resourcesCtx.Done()
 	}()
 

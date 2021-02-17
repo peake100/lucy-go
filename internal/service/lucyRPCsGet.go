@@ -6,15 +6,12 @@ This file contains all lucy rpc methods for fetching jobs / batches.
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
-	"github.com/peake100/gRPEAKEC-go/pkerr"
-	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/db/lucymongo"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -22,71 +19,24 @@ import (
 func (service Lucy) GetBatch(
 	ctx context.Context, uuid *cerealMessages.UUID,
 ) (batch *lucy.Batch, err error) {
-	filter := bson.M{
-		"id": uuid,
-	}
-
-	opts := options.FindOne().SetProjection(batchProjection)
-	result := service.db.Jobs.FindOne(ctx, filter, opts)
-	if err = service.CheckMongoErr(result.Err(), ""); err != nil {
-		return nil, err
-	}
-
-	batch = new(lucy.Batch)
-	err = decodeBatch(result, batch)
-	if err != nil {
-		return nil, err
-	}
-
-	return batch, nil
+	result, err := service.db.GetBatch(ctx, uuid)
+	return result.Batch, nil
 }
 
 // GetJob implements lucy.LucyServer.
 func (service Lucy) GetJob(
 	ctx context.Context, uuid *cerealMessages.UUID,
 ) (*lucy.Job, error) {
-	filter := bson.M{"jobs.id": uuid}
-	projection := bson.M{"jobs.$": 1}
-
-	opts := options.FindOne().SetProjection(projection)
-	result := service.db.Jobs.FindOne(ctx, filter, opts)
-	if result.Err() != nil {
-		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
-			return nil, pkerr.ErrNotFound
-		}
-		return nil, fmt.Errorf("error getting job: %w", result.Err())
-	}
-
-	job := &struct {
-		Jobs []*lucy.Job `bson:"jobs"`
-	}{}
-	err := result.Decode(job)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling job: %w", err)
-	}
-
-	return job.Jobs[0], nil
+	result, err := service.db.GetJob(ctx, uuid)
+	return result.Job, err
 }
 
+// GetBatchJobs implements lucy.LucyServer.
 func (service Lucy) GetBatchJobs(
 	ctx context.Context, uuid *cerealMessages.UUID,
 ) (*lucy.BatchJobs, error) {
-	filter := bson.M{"id": uuid}
-	projection := bson.M{"jobs": 1}
-
-	opts := options.FindOne().SetProjection(projection)
-	result := service.db.Jobs.FindOne(ctx, filter, opts)
-	if err := service.CheckMongoErr(result.Err(), ""); err != nil {
-		return nil, err
-	}
-
-	jobs := new(lucy.BatchJobs)
-	err := result.Decode(jobs)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding records: %w", err)
-	}
-
-	return jobs, nil
+	result, err := service.db.GetBatchJobs(ctx, uuid)
+	return result.Jobs, err
 }
 
 // ListBatches implements lucy.LucyServer.
@@ -100,9 +50,9 @@ func (service Lucy) ListBatches(
 		SetSort(m{"created": -1})
 
 	// Set up our cursor
-	cursor, err := service.db.Jobs.Find(server.Context(), bson.M{}, opts)
+	cursor, err := service.dbMongo.Jobs.Find(server.Context(), bson.M{}, opts)
 	if err != nil {
-		return fmt.Errorf("error getting db cursor: %w", err)
+		return fmt.Errorf("error getting dbMongo cursor: %w", err)
 	}
 
 	// Iterate over our cursor.
@@ -128,7 +78,7 @@ func (service Lucy) ListBatches(
 
 // batchProjection projects all fields but the jobs field so we aren't fetching a ton
 // of jobs info we don't need every time we fetch the batch.
-var batchProjection = db.MustCompileStaticDocument(bson.M{
+var batchProjection = lucymongo.MustCompileStaticDocument(bson.M{
 	"_id":             0,
 	"id":              1,
 	"created":         1,
