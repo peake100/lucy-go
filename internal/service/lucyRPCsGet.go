@@ -43,11 +43,13 @@ func (service Lucy) GetBatchJobs(
 func (service Lucy) ListBatches(
 	_ *empty.Empty, server lucy.Lucy_ListBatchesServer,
 ) error {
+	// Get a batch cursor from our backend.
 	cursor, err := service.db.ListBatches(server.Context())
 	if err != nil {
 		return fmt.Errorf("error getting batch cursor: %w", err)
 	}
 
+	// Exhaust the cursor.
 	for {
 		// Advance the cursor
 		batch, err := cursor.Next(server.Context())
