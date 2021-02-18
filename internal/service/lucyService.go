@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/lucy-go/internal/db"
@@ -10,7 +9,6 @@ import (
 	"github.com/peake100/lucy-go/internal/messaging"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/rs/zerolog"
-	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/grpc"
 	"sync"
 )
@@ -75,23 +73,6 @@ func (service *Lucy) Setup(
 // RegisterOnServer implements pkservices.GrpcService.
 func (service *Lucy) RegisterOnServer(server *grpc.Server) {
 	lucy.RegisterLucyServer(server, service)
-}
-
-// CheckMongoErr takes in a mongodb error and transforms it into a pkerr.APIError.
-func (service *Lucy) CheckMongoErr(err error, message string) error {
-	if err == nil {
-		return nil
-	}
-
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return service.errs.NewErr(
-			pkerr.ErrNotFound,
-			message,
-			nil,
-			err,
-		)
-	}
-	return fmt.Errorf("error finding record: %w", err)
 }
 
 // NewLucy returns a new Lucy service.
