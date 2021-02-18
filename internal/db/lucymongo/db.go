@@ -18,7 +18,7 @@ const EnvKeyMongoURI = "LUCY_MONGO_URI"
 const EnvKeyDBName = "LUCY_DB_NAME"
 
 // Backend holds our connection information and methods for mongoDB and implements
-// db.Connection.
+// db.Backend.
 type Backend struct {
 	Client  *mongo.Client
 	DB      *mongo.Database
@@ -46,7 +46,7 @@ func (backend Backend) CheckMongoErr(err error, message string) error {
 // New returns a Backend value with our mongo client and collections.
 func New(
 	ctx context.Context, errGen *pkerr.ErrorGenerator,
-) (db.Connection, error) {
+) (db.Backend, error) {
 	// Get out mongodb client
 	mongoURI := os.Getenv(EnvKeyMongoURI)
 	if mongoURI == "" {

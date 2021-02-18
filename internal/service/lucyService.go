@@ -18,7 +18,7 @@ import (
 // Lucy implements lucy.LucyServer and pkservices.GrpcService
 type Lucy struct {
 	// db holds the db connection for the service.
-	db db.Connection
+	db db.Backend
 	// dbMongo holds the mongo client and collections for lucy.
 	dbMongo lucymongo.Backend
 	// messenger is used to queue jobs and fre events.

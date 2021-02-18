@@ -7,9 +7,9 @@ import (
 	"github.com/peake100/lucy-go/pkg/lucy"
 )
 
-// Connection is the interface a db connection type must implement to back the
+// Backend is the interface a db connection type must implement to back the
 // lucy service.
-type Connection interface {
+type Backend interface {
 	// GetBatch fetches a batch from the database.
 	GetBatch(ctx context.Context, batchId *cerealMessages.UUID) (ResultGetBatch, error)
 
@@ -35,6 +35,9 @@ type Connection interface {
 
 	// CancelJob applies a cancellation status to a single job.
 	CancelJob(ctx context.Context, job *cerealMessages.UUID) (ResultCancelJob, error)
+
+	// UpdateStage applies an update to a job stage.
+	UpdateStage(ctx context.Context, update StageUpdate) (ResultWorkerUpdate, error)
 }
 
 // CancelBatchResultsCursor yields a new cancelled batch summary each time Next() is
@@ -45,7 +48,7 @@ type CancelBatchResultsCursor interface {
 	Next(ctx context.Context) (ResultCancelBatch, error)
 }
 
-// NewConnectionFunc is a function that creates a new Connection.
-type NewConnectionFunc = func(
+// NewBackendFunc is a function that creates a new Backend.
+type NewBackendFunc = func(
 	ctx context.Context, errGen *pkerr.ErrorGenerator,
-) (Connection, error)
+) (Backend, error)

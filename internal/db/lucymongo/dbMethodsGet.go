@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// GetBatch implements db.Connection.
+// GetBatch implements db.Backend.
 func (backend Backend) GetBatch(
 	ctx context.Context, BatchId *cerealMessages.UUID,
 ) (db.ResultGetBatch, error) {
@@ -32,7 +32,7 @@ func (backend Backend) GetBatch(
 	return result, nil
 }
 
-// GetJob implements db.Connection.
+// GetJob implements db.Backend.
 func (backend Backend) GetJob(
 	ctx context.Context, JobId *cerealMessages.UUID,
 ) (db.ResultGetJob, error) {
