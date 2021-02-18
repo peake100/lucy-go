@@ -7,7 +7,9 @@ import (
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"io"
 )
 
 // GetBatch implements db.Backend.
@@ -135,6 +137,48 @@ func (backend Backend) GetBatchJobs(
 
 	result := db.ResultGetBatchJobs{
 		Jobs: jobs,
+	}
+
+	return result, nil
+}
+
+// listBatchesOpts is the options object we will use for listing batches
+var listBatchesOpts = options.Find().
+	// Use our projection to only return job ids
+	SetProjection(batchProjection).
+	// Sort newest first.
+	SetSort(m{"created": -1})
+
+func (backend Backend) ListBatches(ctx context.Context) (db.ListBatchesCursor, error) {
+	// Set up our cursor
+	cursor, err := backend.Jobs.Find(ctx, bson.M{}, listBatchesOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting mongo cursor: %w", err)
+	}
+
+	return listBatchesCursor{cursor: cursor}, nil
+}
+
+// listBatchesCursor implements db.ListBatchesCursor for returning a list of all batches
+// to the user.
+type listBatchesCursor struct {
+	cursor *mongo.Cursor
+}
+
+func (cursor listBatchesCursor) Next(ctx context.Context) (*lucy.Batch, error) {
+	ok := cursor.cursor.Next(ctx)
+	if !ok {
+		if cursor.cursor.Err() == nil {
+			return nil, io.EOF
+		}
+
+		return nil, fmt.Errorf("error advancing cursor: %w", cursor.cursor.Err())
+	}
+
+	result := new(lucy.Batch)
+	err := cursor.cursor.Decode(result)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding batch document: %w", err)
 	}
 
 	return result, nil

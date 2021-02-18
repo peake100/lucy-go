@@ -13,6 +13,10 @@ type Backend interface {
 	// GetBatch fetches a batch from the database.
 	GetBatch(ctx context.Context, batchId *cerealMessages.UUID) (ResultGetBatch, error)
 
+	// ListBatches returns a cursor to fetch batches from most-recently added to
+	// least-recently added.
+	ListBatches(ctx context.Context) (ListBatchesCursor, error)
+
 	// GetBatchJobs fetches a batch's jobs from the database.
 	GetBatchJobs(
 		ctx context.Context, batchId *cerealMessages.UUID,
@@ -38,6 +42,13 @@ type Backend interface {
 
 	// UpdateStage applies an update to a job stage.
 	UpdateStage(ctx context.Context, update StageUpdate) (ResultWorkerUpdate, error)
+}
+
+// ListBatchesCursor yields a new batch record each time Next() is called
+type ListBatchesCursor interface {
+	// Next returns a cancelled batch summary data or io.EOF if all relevant documents
+	// have been returned.
+	Next(ctx context.Context) (*lucy.Batch, error)
 }
 
 // CancelBatchResultsCursor yields a new cancelled batch summary each time Next() is
