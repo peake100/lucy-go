@@ -10,7 +10,7 @@ import (
 	context "context"
 	proto "github.com/golang/protobuf/proto"
 	empty "github.com/golang/protobuf/ptypes/empty"
-	cerealMessages "github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	cereal "github.com/illuscio-dev/protoCereal-go/cereal"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -82,27 +82,27 @@ var file_lucy_proto_service_proto_rawDesc = []byte{
 	0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x31, 0x0a, 0x09, 0x43, 0x61, 0x6e, 0x63, 0x65,
 	0x6c, 0x4a, 0x6f, 0x62, 0x12, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55,
 	0x49, 0x44, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x42, 0x22, 0x5a, 0x20, 0x67, 0x69,
+	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x42, 0x26, 0x5a, 0x24, 0x67, 0x69,
 	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30,
-	0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x6c, 0x75,
+	0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var file_lucy_proto_service_proto_goTypes = []interface{}{
-	(*NewBatch)(nil),            // 0: lucy.NewBatch
-	(*cerealMessages.UUID)(nil), // 1: cereal.UUID
-	(*empty.Empty)(nil),         // 2: google.protobuf.Empty
-	(*NewJobs)(nil),             // 3: lucy.NewJobs
-	(*StartStage)(nil),          // 4: lucy.StartStage
-	(*ProgressStage)(nil),       // 5: lucy.ProgressStage
-	(*CompleteStage)(nil),       // 6: lucy.CompleteStage
-	(*RunnerUpdate)(nil),        // 7: lucy.RunnerUpdate
-	(*CancelBatches)(nil),       // 8: lucy.CancelBatches
-	(*CreatedBatch)(nil),        // 9: lucy.CreatedBatch
-	(*Batch)(nil),               // 10: lucy.Batch
-	(*CreatedJobs)(nil),         // 11: lucy.CreatedJobs
-	(*Job)(nil),                 // 12: lucy.Job
-	(*BatchJobs)(nil),           // 13: lucy.BatchJobs
+	(*NewBatch)(nil),      // 0: lucy.NewBatch
+	(*cereal.UUID)(nil),   // 1: cereal.UUID
+	(*empty.Empty)(nil),   // 2: google.protobuf.Empty
+	(*NewJobs)(nil),       // 3: lucy.NewJobs
+	(*StartStage)(nil),    // 4: lucy.StartStage
+	(*ProgressStage)(nil), // 5: lucy.ProgressStage
+	(*CompleteStage)(nil), // 6: lucy.CompleteStage
+	(*RunnerUpdate)(nil),  // 7: lucy.RunnerUpdate
+	(*CancelBatches)(nil), // 8: lucy.CancelBatches
+	(*CreatedBatch)(nil),  // 9: lucy.CreatedBatch
+	(*Batch)(nil),         // 10: lucy.Batch
+	(*CreatedJobs)(nil),   // 11: lucy.CreatedJobs
+	(*Job)(nil),           // 12: lucy.Job
+	(*BatchJobs)(nil),     // 13: lucy.BatchJobs
 }
 var file_lucy_proto_service_proto_depIdxs = []int32{
 	0,  // 0: lucy.Lucy.CreateBatch:input_type -> lucy.NewBatch
@@ -178,15 +178,15 @@ type LucyClient interface {
 	// CreateBatch creates a new batch.
 	CreateBatch(ctx context.Context, in *NewBatch, opts ...grpc.CallOption) (*CreatedBatch, error)
 	// Batch returns a single batch for a given id.
-	GetBatch(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*Batch, error)
+	GetBatch(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*Batch, error)
 	// List batches lists all batches from newest to oldest.
 	ListBatches(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (Lucy_ListBatchesClient, error)
 	// CreateJob creates a new job and returns an id for fetching it.
 	CreateJobs(ctx context.Context, in *NewJobs, opts ...grpc.CallOption) (*CreatedJobs, error)
 	// GetJob fetches a single job.
-	GetJob(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*Job, error)
+	GetJob(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*Job, error)
 	// GetBatchJobs returns the jobs for a given batch.
-	GetBatchJobs(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*BatchJobs, error)
+	GetBatchJobs(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*BatchJobs, error)
 	// StartStage starts a job stage.
 	StartStage(ctx context.Context, in *StartStage, opts ...grpc.CallOption) (*empty.Empty, error)
 	// ProgressStage updates the progress on a stage.
@@ -217,7 +217,7 @@ type LucyClient interface {
 	// CancelBatch cancels all jobs in the passed batches.
 	CancelBatches(ctx context.Context, in *CancelBatches, opts ...grpc.CallOption) (*empty.Empty, error)
 	// CancelJobs cancels all jobs listed.
-	CancelJob(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*empty.Empty, error)
+	CancelJob(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type lucyClient struct {
@@ -237,7 +237,7 @@ func (c *lucyClient) CreateBatch(ctx context.Context, in *NewBatch, opts ...grpc
 	return out, nil
 }
 
-func (c *lucyClient) GetBatch(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*Batch, error) {
+func (c *lucyClient) GetBatch(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*Batch, error) {
 	out := new(Batch)
 	err := c.cc.Invoke(ctx, "/lucy.Lucy/GetBatch", in, out, opts...)
 	if err != nil {
@@ -287,7 +287,7 @@ func (c *lucyClient) CreateJobs(ctx context.Context, in *NewJobs, opts ...grpc.C
 	return out, nil
 }
 
-func (c *lucyClient) GetJob(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*Job, error) {
+func (c *lucyClient) GetJob(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*Job, error) {
 	out := new(Job)
 	err := c.cc.Invoke(ctx, "/lucy.Lucy/GetJob", in, out, opts...)
 	if err != nil {
@@ -296,7 +296,7 @@ func (c *lucyClient) GetJob(ctx context.Context, in *cerealMessages.UUID, opts .
 	return out, nil
 }
 
-func (c *lucyClient) GetBatchJobs(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*BatchJobs, error) {
+func (c *lucyClient) GetBatchJobs(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*BatchJobs, error) {
 	out := new(BatchJobs)
 	err := c.cc.Invoke(ctx, "/lucy.Lucy/GetBatchJobs", in, out, opts...)
 	if err != nil {
@@ -372,7 +372,7 @@ func (c *lucyClient) CancelBatches(ctx context.Context, in *CancelBatches, opts 
 	return out, nil
 }
 
-func (c *lucyClient) CancelJob(ctx context.Context, in *cerealMessages.UUID, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *lucyClient) CancelJob(ctx context.Context, in *cereal.UUID, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/lucy.Lucy/CancelJob", in, out, opts...)
 	if err != nil {
@@ -386,15 +386,15 @@ type LucyServer interface {
 	// CreateBatch creates a new batch.
 	CreateBatch(context.Context, *NewBatch) (*CreatedBatch, error)
 	// Batch returns a single batch for a given id.
-	GetBatch(context.Context, *cerealMessages.UUID) (*Batch, error)
+	GetBatch(context.Context, *cereal.UUID) (*Batch, error)
 	// List batches lists all batches from newest to oldest.
 	ListBatches(*empty.Empty, Lucy_ListBatchesServer) error
 	// CreateJob creates a new job and returns an id for fetching it.
 	CreateJobs(context.Context, *NewJobs) (*CreatedJobs, error)
 	// GetJob fetches a single job.
-	GetJob(context.Context, *cerealMessages.UUID) (*Job, error)
+	GetJob(context.Context, *cereal.UUID) (*Job, error)
 	// GetBatchJobs returns the jobs for a given batch.
-	GetBatchJobs(context.Context, *cerealMessages.UUID) (*BatchJobs, error)
+	GetBatchJobs(context.Context, *cereal.UUID) (*BatchJobs, error)
 	// StartStage starts a job stage.
 	StartStage(context.Context, *StartStage) (*empty.Empty, error)
 	// ProgressStage updates the progress on a stage.
@@ -425,7 +425,7 @@ type LucyServer interface {
 	// CancelBatch cancels all jobs in the passed batches.
 	CancelBatches(context.Context, *CancelBatches) (*empty.Empty, error)
 	// CancelJobs cancels all jobs listed.
-	CancelJob(context.Context, *cerealMessages.UUID) (*empty.Empty, error)
+	CancelJob(context.Context, *cereal.UUID) (*empty.Empty, error)
 }
 
 // UnimplementedLucyServer can be embedded to have forward compatible implementations.
@@ -435,7 +435,7 @@ type UnimplementedLucyServer struct {
 func (*UnimplementedLucyServer) CreateBatch(context.Context, *NewBatch) (*CreatedBatch, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBatch not implemented")
 }
-func (*UnimplementedLucyServer) GetBatch(context.Context, *cerealMessages.UUID) (*Batch, error) {
+func (*UnimplementedLucyServer) GetBatch(context.Context, *cereal.UUID) (*Batch, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBatch not implemented")
 }
 func (*UnimplementedLucyServer) ListBatches(*empty.Empty, Lucy_ListBatchesServer) error {
@@ -444,10 +444,10 @@ func (*UnimplementedLucyServer) ListBatches(*empty.Empty, Lucy_ListBatchesServer
 func (*UnimplementedLucyServer) CreateJobs(context.Context, *NewJobs) (*CreatedJobs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateJobs not implemented")
 }
-func (*UnimplementedLucyServer) GetJob(context.Context, *cerealMessages.UUID) (*Job, error) {
+func (*UnimplementedLucyServer) GetJob(context.Context, *cereal.UUID) (*Job, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJob not implemented")
 }
-func (*UnimplementedLucyServer) GetBatchJobs(context.Context, *cerealMessages.UUID) (*BatchJobs, error) {
+func (*UnimplementedLucyServer) GetBatchJobs(context.Context, *cereal.UUID) (*BatchJobs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBatchJobs not implemented")
 }
 func (*UnimplementedLucyServer) StartStage(context.Context, *StartStage) (*empty.Empty, error) {
@@ -465,7 +465,7 @@ func (*UnimplementedLucyServer) Runner(Lucy_RunnerServer) error {
 func (*UnimplementedLucyServer) CancelBatches(context.Context, *CancelBatches) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelBatches not implemented")
 }
-func (*UnimplementedLucyServer) CancelJob(context.Context, *cerealMessages.UUID) (*empty.Empty, error) {
+func (*UnimplementedLucyServer) CancelJob(context.Context, *cereal.UUID) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelJob not implemented")
 }
 
@@ -492,7 +492,7 @@ func _Lucy_CreateBatch_Handler(srv interface{}, ctx context.Context, dec func(in
 }
 
 func _Lucy_GetBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(cerealMessages.UUID)
+	in := new(cereal.UUID)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -504,7 +504,7 @@ func _Lucy_GetBatch_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/lucy.Lucy/GetBatch",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LucyServer).GetBatch(ctx, req.(*cerealMessages.UUID))
+		return srv.(LucyServer).GetBatch(ctx, req.(*cereal.UUID))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -549,7 +549,7 @@ func _Lucy_CreateJobs_Handler(srv interface{}, ctx context.Context, dec func(int
 }
 
 func _Lucy_GetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(cerealMessages.UUID)
+	in := new(cereal.UUID)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -561,13 +561,13 @@ func _Lucy_GetJob_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/lucy.Lucy/GetJob",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LucyServer).GetJob(ctx, req.(*cerealMessages.UUID))
+		return srv.(LucyServer).GetJob(ctx, req.(*cereal.UUID))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Lucy_GetBatchJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(cerealMessages.UUID)
+	in := new(cereal.UUID)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -579,7 +579,7 @@ func _Lucy_GetBatchJobs_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/lucy.Lucy/GetBatchJobs",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LucyServer).GetBatchJobs(ctx, req.(*cerealMessages.UUID))
+		return srv.(LucyServer).GetBatchJobs(ctx, req.(*cereal.UUID))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -683,7 +683,7 @@ func _Lucy_CancelBatches_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _Lucy_CancelJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(cerealMessages.UUID)
+	in := new(cereal.UUID)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -695,7 +695,7 @@ func _Lucy_CancelJob_Handler(srv interface{}, ctx context.Context, dec func(inte
 		FullMethod: "/lucy.Lucy/CancelJob",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LucyServer).CancelJob(ctx, req.(*cerealMessages.UUID))
+		return srv.(LucyServer).CancelJob(ctx, req.(*cereal.UUID))
 	}
 	return interceptor(ctx, in, info, handler)
 }

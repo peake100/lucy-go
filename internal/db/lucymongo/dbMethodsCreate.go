@@ -3,8 +3,9 @@ package lucymongo
 import (
 	"context"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/internal/db"
+	"github.com/peake100/lucy-go/internal/db/internal"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -15,7 +16,7 @@ import (
 func (backend Backend) CreateBatch(
 	ctx context.Context, batch *lucy.NewBatch,
 ) (db.ResultCreateBatch, error) {
-	batchId, err := NewRecordId()
+	batchId, err := internal.NewRecordId()
 	if err != nil {
 		return db.ResultCreateBatch{}, fmt.Errorf(
 			"error creating record: %w", err,
@@ -25,21 +26,21 @@ func (backend Backend) CreateBatch(
 	currentTime := time.Now().UTC()
 
 	batchRecord := &struct {
-		Id             *cerealMessages.UUID `bson:"id"`
-		Created        time.Time            `bson:"created"`
-		Modified       time.Time            `bson:"modified"`
-		Type           string               `bson:"type"`
-		Name           string               `bson:"name"`
-		Description    string               `bson:"description"`
-		Jobs           []*lucy.Job          `bson:"jobs"`
-		JobCount       uint32               `bson:"job_count"`
-		PendingCount   uint32               `bson:"pending_count"`
-		CancelledCount uint32               `bson:"cancelled_count"`
-		RunningCount   uint32               `bson:"running_count"`
-		CompletedCount uint32               `bson:"completed_count"`
-		SuccessCount   uint32               `bson:"success_count"`
-		FailureCount   uint32               `bson:"failure_count"`
-		Progress       float32              `bson:"progress"`
+		Id             *cereal.UUID `bson:"id"`
+		Created        time.Time    `bson:"created"`
+		Modified       time.Time    `bson:"modified"`
+		Type           string       `bson:"type"`
+		Name           string       `bson:"name"`
+		Description    string       `bson:"description"`
+		Jobs           []*lucy.Job  `bson:"jobs"`
+		JobCount       uint32       `bson:"job_count"`
+		PendingCount   uint32       `bson:"pending_count"`
+		CancelledCount uint32       `bson:"cancelled_count"`
+		RunningCount   uint32       `bson:"running_count"`
+		CompletedCount uint32       `bson:"completed_count"`
+		SuccessCount   uint32       `bson:"success_count"`
+		FailureCount   uint32       `bson:"failure_count"`
+		Progress       float32      `bson:"progress"`
 	}{
 		Id:             batchId,
 		Created:        currentTime,
@@ -58,12 +59,7 @@ func (backend Backend) CreateBatch(
 		Progress:       0,
 	}
 
-	created := &lucy.CreatedBatch{
-		BatchId: batchId,
-		JobIds:  nil,
-	}
-
-	_, err = backend.Jobs.InsertOne(ctx, batchRecord)
+	_, err = backend.jobs.InsertOne(ctx, batchRecord)
 	if err != nil {
 		return db.ResultCreateBatch{}, fmt.Errorf(
 			"error inserting document: %w", err,
@@ -71,7 +67,8 @@ func (backend Backend) CreateBatch(
 	}
 
 	result := db.ResultCreateBatch{
-		Created:  created,
+		BatchId:  batchId,
+		Created:  timestamppb.New(currentTime),
 		Modified: timestamppb.New(currentTime),
 	}
 
@@ -100,9 +97,9 @@ func (backend Backend) CreateJobs(
 
 	// We need to keep track of the job id's we make so we return them in the same
 	// jobQueueOrder that the jobs were sent.
-	jobIds := make([]*cerealMessages.UUID, len(jobs.Jobs))
+	jobIds := make([]*cereal.UUID, len(jobs.Jobs))
 	for i := range jobs.Jobs {
-		recordId, err := NewRecordId()
+		recordId, err := internal.NewRecordId()
 		if err != nil {
 			return db.ResultCreateJobs{}, fmt.Errorf(
 				"error creating record: %w", err,
@@ -119,7 +116,7 @@ func (backend Backend) CreateJobs(
 		SetProjection(createJobProjection).
 		SetReturnDocument(options.After)
 
-	dbResult := backend.Jobs.FindOneAndUpdate(ctx, filter, updatePipeline, opts)
+	dbResult := backend.jobs.FindOneAndUpdate(ctx, filter, updatePipeline, opts)
 	err := backend.CheckMongoErr(dbResult.Err(), "batch id not found")
 	if err != nil {
 		return db.ResultCreateJobs{}, err

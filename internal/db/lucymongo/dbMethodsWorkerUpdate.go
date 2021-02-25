@@ -24,7 +24,7 @@ func (backend Backend) UpdateStage(
 		SetProjection(updateProjection).
 		SetReturnDocument(options.After)
 
-	dbResult := backend.Jobs.FindOneAndUpdate(
+	dbResult := backend.jobs.FindOneAndUpdate(
 		ctx, update.Filter, update.Pipeline, opts,
 	)
 
@@ -275,7 +275,7 @@ func (backend Backend) investigateStageUpdateErr(
 	for i := 0; i < 3; i++ {
 		// Extract the status.
 		findOpts := options.FindOne().SetProjection(m{"jobs.$": 1})
-		findResult := backend.Jobs.FindOne(ctx, update.Filter, findOpts)
+		findResult := backend.jobs.FindOne(ctx, update.Filter, findOpts)
 		err = findResult.Err()
 
 		// If there was no error once we remove the status check, that means the stage
@@ -283,7 +283,7 @@ func (backend Backend) investigateStageUpdateErr(
 		if err == nil {
 			return backend.investigateStageUpdateErrJobExists(findResult, update)
 		} else if errors.Is(err, mongo.ErrNoDocuments) {
-			return backend.ErrsGen.NewErr(
+			return backend.errsGen.NewErr(
 				pkerr.ErrNotFound,
 				"no job stage found that matched stage_id. make sure the job"+
 					" id is correct, and the stage index is not out of bounds",
@@ -333,7 +333,7 @@ func (backend Backend) investigateStageUpdateErrJobExists(
 
 	// if the status of the job is cancelled, then return a lucy.ErrJobCancelled error.
 	if job.Status == lucy.Status_CANCELLED {
-		return backend.ErrsGen.NewErr(
+		return backend.errsGen.NewErr(
 			lucy.ErrJobCancelled,
 			fmt.Sprintf(
 				"cannot apply %v update",
@@ -347,7 +347,7 @@ func (backend Backend) investigateStageUpdateErrJobExists(
 	// If our run count is greater than our max retries count, then we need to return
 	// lucy.ErrMaxRetriesExceeded.
 	if job.RunCount > job.MaxRetries {
-		return backend.ErrsGen.NewErr(
+		return backend.errsGen.NewErr(
 			lucy.ErrMaxRetriesExceeded,
 			fmt.Sprintf(
 				"cannot apply %v update",
@@ -359,7 +359,7 @@ func (backend Backend) investigateStageUpdateErrJobExists(
 	}
 
 	// Otherwise this is a bad return because the record is in a disallowed state
-	return backend.ErrsGen.NewErr(
+	return backend.errsGen.NewErr(
 		lucy.ErrInvalidStageStatus,
 		fmt.Sprintf(
 			"cannot apply %v update: job stage must be in one of the "+

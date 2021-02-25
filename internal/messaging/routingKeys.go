@@ -2,7 +2,7 @@ package messaging
 
 import (
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 )
 
@@ -55,7 +55,7 @@ func JobEventKey(jobId *events.JobId, eventType string) string {
 }
 
 // BatchEventKey creates a batch event routing key for a given job.
-func BatchEventKey(batchId *cerealMessages.UUID, eventType string) string {
+func BatchEventKey(batchId *cereal.UUID, eventType string) string {
 	return fmt.Sprintf(
 		"batch.%v.%v",
 		batchId.MustGoogle().String(),

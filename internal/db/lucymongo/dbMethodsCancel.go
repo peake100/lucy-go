@@ -3,7 +3,7 @@ package lucymongo
 import (
 	"context"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
@@ -19,7 +19,7 @@ func (backend Backend) CancelBatches(
 	filter := m{"id": m{"$in": batches.BatchIds}}
 	update := cancelBatchMongoPipeline
 
-	updateResult, err := backend.Jobs.UpdateMany(ctx, filter, update)
+	updateResult, err := backend.jobs.UpdateMany(ctx, filter, update)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"error running cancellation pipeline: %w", err,
@@ -28,7 +28,7 @@ func (backend Backend) CancelBatches(
 
 	batchesRequested := int64(len(batches.BatchIds))
 	if updateResult.MatchedCount != batchesRequested {
-		return nil, backend.ErrsGen.NewErr(
+		return nil, backend.errsGen.NewErr(
 			pkerr.ErrNotFound,
 			fmt.Sprintf(
 				"%v batches found and cancelled, %v batches could not be found",
@@ -41,7 +41,7 @@ func (backend Backend) CancelBatches(
 	}
 
 	// Get the updated batch summaries.
-	cursor, err := backend.Jobs.Find(
+	cursor, err := backend.jobs.Find(
 		ctx, filter, options.Find().SetProjection(cancelBatchProjection),
 	)
 
@@ -74,8 +74,8 @@ func (cursor *mongoCancelBatchResultsCursor) Next(
 	decoded := struct {
 		Batch *db.ResultBatchSummaries `bson:",inline"`
 		Jobs  []struct {
-			Id     *cerealMessages.UUID `bson:"id"`
-			Status lucy.Status          `bson:"status"`
+			Id     *cereal.UUID `bson:"id"`
+			Status lucy.Status  `bson:"status"`
 		}
 	}{}
 
@@ -90,7 +90,7 @@ func (cursor *mongoCancelBatchResultsCursor) Next(
 	}
 
 	// Allocate a slice with enough capacity for all of the job ids on the result.
-	result.JobIds = make([]*cerealMessages.UUID, 0, len(decoded.Jobs))
+	result.JobIds = make([]*cereal.UUID, 0, len(decoded.Jobs))
 
 	// Extract the id's of cancelled jobs.
 	for _, job := range decoded.Jobs {
@@ -122,13 +122,13 @@ var cancelBatchProjection = MustCompileStaticDocument(m{
 	"completed_count": 1,
 	"success_count":   1,
 	"failure_count":   1,
-	// Jobs fields
+	// jobs fields
 	"jobs.id":     1,
 	"jobs.status": 1,
 })
 
 func (backend Backend) CancelJob(
-	ctx context.Context, job *cerealMessages.UUID,
+	ctx context.Context, job *cereal.UUID,
 ) (db.ResultCancelJob, error) {
 	filter := m{"jobs.id": job}
 	update := CancelJobsPipeline(job)
@@ -137,7 +137,7 @@ func (backend Backend) CancelJob(
 		SetProjection(cancelJobProjection).
 		SetReturnDocument(options.After)
 
-	dbResult := backend.Jobs.FindOneAndUpdate(ctx, filter, update, opts)
+	dbResult := backend.jobs.FindOneAndUpdate(ctx, filter, update, opts)
 	if err := backend.CheckMongoErr(dbResult.Err(), ""); err != nil {
 		return db.ResultCancelJob{}, err
 	}

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pktesting"
+	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/internal/db/lucymongo"
+	"github.com/peake100/lucy-go/internal/db/lucysql"
 	"github.com/peake100/lucy-go/internal/messaging"
 	"github.com/peake100/lucy-go/internal/prototesting"
 	"github.com/peake100/lucy-go/internal/service"
@@ -26,14 +28,25 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"os"
+	"os/user"
+	"path"
 	"sync"
 	"testing"
 	"time"
 )
 
 func init() {
-	os.Setenv(lucymongo.EnvKeyMongoURI, "mongodb://127.0.0.1:57017")
+	os.Setenv(lucymongo.EnvKeyURI, "mongodb://127.0.0.1:57017")
+	os.Setenv(lucymongo.EnvKeyDBName, "lucy")
 	os.Setenv(messaging.EnvKeyRabbitURI, "amqp://127.0.0.1:57018")
+
+	current, err := user.Current()
+	if err != nil {
+		panic(fmt.Errorf("error getting user: %w", err))
+	}
+	home := path.Join(current.HomeDir, "testing/lucytesting.sqlite3")
+
+	os.Setenv(lucysql.EnvKeySQLiteFile, home)
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
@@ -53,8 +66,10 @@ type lucySuite struct {
 	// manager holds helper methods that invoke our base suite.
 	manager pktesting.ManagerSuite
 
-	db     lucymongo.Backend
 	client lucy.LucyClient
+
+	// startTime is the time the suite was started.
+	startTime time.Time
 
 	// eventQueueJobCreated is a queue that is declared and bound to the job creation
 	// events.
@@ -76,22 +91,32 @@ type lucySuite struct {
 }
 
 func (suite *lucySuite) SetupSuite() {
+	// Set the start time.
+	suite.startTime = time.Now().UTC()
+
 	// get the dbMongo connector
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
 	var err error
 	db, err := lucymongo.New(ctx, nil)
-	suite.db = db.(lucymongo.Backend)
 	if !suite.NoError(err, "connect to dbMongo") {
 		suite.FailNow("could not connect to dbMongo")
 	}
 
 	// Drop the lucy database
-	err = suite.db.DB.Drop(ctx)
+	dbMongo := db.(lucymongo.Backend)
+	err = dbMongo.Tester(suite.T()).DB().Drop(ctx)
 	if !suite.NoError(err, "drop database") {
 		suite.FailNow("could not drop database")
 	}
+
+	// Delete the database for a clean start
+	sqliteFile := os.Getenv(lucysql.EnvKeySQLiteFile)
+	if !suite.NotZero(sqliteFile, "SQLite file not zero") {
+		suite.T().FailNow()
+	}
+	_ = os.Remove(sqliteFile)
 
 	// Run the basic AMPQ setup.
 	suite.setupBasicAMPQ()
@@ -293,14 +318,14 @@ func newLucySuite() lucySuite {
 type LucyBatchUnarySuite struct {
 	lucySuite
 
-	batchId           *cerealMessages.UUID
+	batchId           *cereal.UUID
 	batchAdded        *lucy.NewBatch
 	lastBatchModified time.Time
 
-	jobId01    *cerealMessages.UUID
+	jobId01    *cereal.UUID
 	jobAdded01 *lucy.NewJob
 
-	jobId02    *cerealMessages.UUID
+	jobId02    *cereal.UUID
 	jobAdded02 *lucy.NewJob
 
 	batch02Created *lucy.CreatedBatch
@@ -331,7 +356,7 @@ func (suite *LucyBatchUnarySuite) checkBatchBasic(received *lucy.Batch) {
 
 func (suite *LucyBatchUnarySuite) checkJobBasic(
 	added *lucy.NewJob,
-	jobId *cerealMessages.UUID,
+	jobId *cereal.UUID,
 	received *lucy.Job,
 	studentName string,
 ) {
@@ -388,7 +413,7 @@ func (suite *LucyBatchUnarySuite) checkStageRunning(stage *lucy.JobStage) {
 	suite.Equal(lucy.Result_NONE, stage.Result, "result")
 }
 
-func (suite *LucyBatchUnarySuite) getJob(jobId *cerealMessages.UUID) *lucy.Job {
+func (suite *LucyBatchUnarySuite) getJob(jobId *cereal.UUID) *lucy.Job {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
@@ -461,6 +486,20 @@ func (suite *LucyBatchUnarySuite) getEvent(
 	// within a second of each other.
 	suite.WithinDuration(
 		eventModified.GetModified().AsTime(), msg.Timestamp.UTC(), 1*time.Second,
+	)
+
+	// Check that the modified time is from within the last two seconds.
+	suite.WithinDuration(
+		eventModified.GetModified().AsTime(), time.Now().UTC(), 2*time.Second,
+	)
+
+	// Check that the event time is equal to or after the suite start time.
+	suite.True(
+		eventModified.GetModified().AsTime().After(suite.startTime) ||
+			eventModified.GetModified().AsTime().Equal(suite.startTime),
+		"EVENT_MODIFIED: %v, \nSTART TIME: %v",
+		eventModified.GetModified().AsTime(),
+		suite.startTime,
 	)
 
 	if !isLast {
@@ -611,7 +650,7 @@ func (suite *LucyBatchUnarySuite) Test0033_GetMessageFromWorkerQueue_Job01() {
 		suite.T().FailNow()
 	}
 
-	jobId := new(cerealMessages.UUID)
+	jobId := new(cereal.UUID)
 	err = proto.Unmarshal(delivery.Body, jobId)
 	if !suite.NoError(err, "unmarshal delivery body") {
 		suite.T().FailNow()
@@ -665,7 +704,9 @@ func (suite *LucyBatchUnarySuite) Test0040_GetBatch_JobPending() {
 	suite.checkBatchBasic(batch)
 	suite.True(
 		batch.Created.AsTime().Before(batch.Modified.AsTime()),
-		"modified equals created",
+		"modified after created\nMODIFIED: %v\nCREATED : %v",
+		batch.Created.AsTime(),
+		batch.Modified.AsTime(),
 	)
 
 	suite.Equal(uint32(1), batch.JobCount, "1 jobs")
@@ -676,16 +717,6 @@ func (suite *LucyBatchUnarySuite) Test0040_GetBatch_JobPending() {
 	suite.Equal(uint32(0), batch.SuccessCount, "no successes")
 	suite.Equal(uint32(0), batch.FailureCount, "no failures")
 	suite.Equal(float32(0.0), batch.Progress, "progress: 0.0")
-
-	if !suite.Len(batch.Jobs, 1, "job ids length") {
-		suite.T().FailNow()
-	}
-
-	suite.Equal(
-		suite.jobId01.MustGoogle(),
-		batch.Jobs[0].MustGoogle(),
-		"job id correct",
-	)
 }
 
 func (suite *LucyBatchUnarySuite) Test0050_GetJob_Pending() {
@@ -1387,7 +1418,7 @@ func (suite *LucyBatchUnarySuite) Test0225_GetMessageFromWorkerQueue_Job02() {
 		"SortStudent"), true,
 	)
 
-	jobId := new(cerealMessages.UUID)
+	jobId := new(cereal.UUID)
 	err := proto.Unmarshal(message.Body, jobId)
 	if !suite.NoError(err, "unmarshal job id") {
 		suite.T().FailNow()
@@ -1707,7 +1738,7 @@ func (suite *LucyBatchUnarySuite) Test0310_CompleteStage_Failed_Job02() {
 		},
 		Update: &lucy.CompleteStageUpdate{
 			Error: &pkerr.Error{
-				Id:          cerealMessages.MustUUIDRandom(),
+				Id:          cereal.MustUUIDRandom(),
 				Issuer:      "Hogwarts",
 				Code:        934,
 				GrpcCode:    int32(codes.InvalidArgument),
@@ -1839,7 +1870,7 @@ func (suite *LucyBatchUnarySuite) Test0331_Cancel_CompletedBatch() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 	_, err := suite.client.CancelBatches(
-		ctx, &lucy.CancelBatches{BatchIds: []*cerealMessages.UUID{suite.batchId}},
+		ctx, &lucy.CancelBatches{BatchIds: []*cereal.UUID{suite.batchId}},
 	)
 
 	if !suite.NoError(err, "cancel batch") {
@@ -2005,9 +2036,7 @@ func (suite *LucyBatchUnarySuite) Test0345_GetBatch02_MultiJob() {
 		suite.T().FailNow()
 	}
 
-	if !suite.Len(batch.Jobs, 2, "2 job ids present") {
-		suite.T().FailNow()
-	}
+	suite.Equal(uint32(2), batch.JobCount, "2 job ids present")
 }
 
 func (suite *LucyBatchUnarySuite) Test0347_GetBatch02_WorkQueueMessages() {
@@ -2017,7 +2046,7 @@ func (suite *LucyBatchUnarySuite) Test0347_GetBatch02_WorkQueueMessages() {
 
 	jobIds := make([]string, 0)
 
-	jobId := new(cerealMessages.UUID)
+	jobId := new(cereal.UUID)
 	err := proto.Unmarshal(msg.Body, jobId)
 	if !suite.NoError(err, "unmarshal job 1 id") {
 		suite.T().FailNow()
@@ -2028,7 +2057,7 @@ func (suite *LucyBatchUnarySuite) Test0347_GetBatch02_WorkQueueMessages() {
 		messaging.WorkerQueueName("SortStudent"), true,
 	)
 
-	jobId2 := new(cerealMessages.UUID)
+	jobId2 := new(cereal.UUID)
 	err = proto.Unmarshal(msg.Body, jobId2)
 	if !suite.NoError(err, "unmarshal job 1 id") {
 		suite.T().FailNow()
@@ -2055,7 +2084,7 @@ func (suite *LucyBatchUnarySuite) Test0350_CancelBatch() {
 	_, err := suite.client.CancelBatches(
 		ctx,
 		&lucy.CancelBatches{
-			BatchIds: []*cerealMessages.UUID{suite.batch02Created.BatchId},
+			BatchIds: []*cereal.UUID{suite.batch02Created.BatchId},
 		},
 	)
 	if !suite.NoError(err, "cancel batch") {
@@ -2133,7 +2162,6 @@ func (suite *LucyBatchUnarySuite) Test0360_GetBatch02_Cancelled() {
 	suite.Equal(uint32(0), batch.CompletedCount, "completed_count")
 	suite.Equal(uint32(0), batch.SuccessCount, "success_count")
 	suite.Equal(uint32(0), batch.FailureCount, "failure_count")
-	suite.Len(batch.Jobs, 2, "two batch jobs")
 }
 
 func (suite *LucyBatchUnarySuite) Test0370_GetJobs_Cancelled() {
@@ -2317,7 +2345,7 @@ func (suite *LucyBatchUnarySuite) Test0390_ListBatches() {
 		suite.T().FailNow()
 	}
 
-	expectedBatchIds := []*cerealMessages.UUID{
+	expectedBatchIds := []*cereal.UUID{
 		suite.batch03Created.BatchId,
 		suite.batch02Created.BatchId,
 		suite.batchId,
@@ -2350,7 +2378,15 @@ func (suite *LucyBatchUnarySuite) Test0390_ListBatches() {
 	suite.Equalf(3, i, "3 batches found")
 }
 
-func TestLucyBatchUnarySuite(t *testing.T) {
+func TestLucyBatchUnarySuite_Mongo(t *testing.T) {
+	os.Setenv(db.EnvKeyBackendType, db.BackendTypeMongo)
+	suite.Run(t, &LucyBatchUnarySuite{
+		lucySuite: newLucySuite(),
+	})
+}
+
+func TestLucyBatchUnarySuite_SQLite(t *testing.T) {
+	os.Setenv(db.EnvKeyBackendType, db.BackendTypeSQLite)
 	suite.Run(t, &LucyBatchUnarySuite{
 		lucySuite: newLucySuite(),
 	})
@@ -2546,6 +2582,7 @@ func (suite *LucyBatchStreamSuite) TearDownSuite() {
 }
 
 func TestLucyBatchStreamSuite(t *testing.T) {
+	os.Setenv(db.EnvKeyBackendType, db.BackendTypeMongo)
 	suite.Run(t, &LucyBatchStreamSuite{
 		LucyBatchUnarySuite: LucyBatchUnarySuite{
 			lucySuite: newLucySuite(),
@@ -2556,8 +2593,8 @@ func TestLucyBatchStreamSuite(t *testing.T) {
 type LucyErrorsSuite struct {
 	lucySuite
 
-	batchId *cerealMessages.UUID
-	jobId   *cerealMessages.UUID
+	batchId *cereal.UUID
+	jobId   *cereal.UUID
 }
 
 func (suite *LucyErrorsSuite) SetupSuite() {
@@ -2603,7 +2640,7 @@ func (suite *LucyErrorsSuite) Test0010_GetBatch_NotExists() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
-	_, err := suite.client.GetBatch(ctx, cerealMessages.MustUUIDRandom())
+	_, err := suite.client.GetBatch(ctx, cereal.MustUUIDRandom())
 	assertErr := pktesting.NewAssertAPIErr(suite.T(), err)
 	assertErr.Sentinel(pkerr.ErrNotFound, true)
 }
@@ -2612,7 +2649,7 @@ func (suite *LucyErrorsSuite) Test0020_GetJob_NotExists() {
 	ctx, cancel := pktesting.New3SecondCtx()
 	defer cancel()
 
-	_, err := suite.client.GetJob(ctx, cerealMessages.MustUUIDRandom())
+	_, err := suite.client.GetJob(ctx, cereal.MustUUIDRandom())
 	assertErr := pktesting.NewAssertAPIErr(suite.T(), err)
 	assertErr.Sentinel(pkerr.ErrNotFound, true)
 }
@@ -2623,7 +2660,7 @@ func (suite *LucyErrorsSuite) Test0030_StartJob_NotExists() {
 
 	update := &lucy.StartStage{
 		StageId: &lucy.StageID{
-			JobId:      cerealMessages.MustUUIDRandom(),
+			JobId:      cereal.MustUUIDRandom(),
 			StageIndex: 0,
 		},
 		Update: &lucy.StartStageUpdate{RunBy: "testworker"},
@@ -2645,7 +2682,7 @@ func (suite *LucyErrorsSuite) Test0040_ProgressJob_NotExists() {
 
 	update := &lucy.ProgressStage{
 		StageId: &lucy.StageID{
-			JobId:      cerealMessages.MustUUIDRandom(),
+			JobId:      cereal.MustUUIDRandom(),
 			StageIndex: 0,
 		},
 		Update: &lucy.ProgressStageUpdate{
@@ -2670,7 +2707,7 @@ func (suite *LucyErrorsSuite) Test0050_CompleteJob_NotExists() {
 
 	update := &lucy.CompleteStage{
 		StageId: &lucy.StageID{
-			JobId:      cerealMessages.MustUUIDRandom(),
+			JobId:      cereal.MustUUIDRandom(),
 			StageIndex: 0,
 		},
 		Update: &lucy.CompleteStageUpdate{
@@ -2831,7 +2868,7 @@ func (suite *LucyErrorsSuite) Test0090_StartJob_Cancelled() {
 	}
 
 	_, err = suite.client.CancelBatches(
-		ctx, &lucy.CancelBatches{BatchIds: []*cerealMessages.UUID{created.BatchId}},
+		ctx, &lucy.CancelBatches{BatchIds: []*cereal.UUID{created.BatchId}},
 	)
 
 	if !suite.NoError(err, "cancel batch") {

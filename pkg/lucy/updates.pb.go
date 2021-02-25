@@ -10,7 +10,7 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	any "github.com/golang/protobuf/ptypes/any"
 	_ "github.com/golang/protobuf/ptypes/empty"
-	cerealMessages "github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	cereal "github.com/illuscio-dev/protoCereal-go/cereal"
 	protogen "github.com/peake100/gRPEAKEC-go/pkerr/protogen"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -36,7 +36,7 @@ type StageID struct {
 	unknownFields protoimpl.UnknownFields
 
 	// id of the job this update is for
-	JobId *cerealMessages.UUID `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	JobId *cereal.UUID `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
 	// stage_index this update is for
 	StageIndex int32 `protobuf:"varint,2,opt,name=stage_index,json=stageIndex,proto3" json:"stage_index,omitempty"`
 }
@@ -73,7 +73,7 @@ func (*StageID) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_updates_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *StageID) GetJobId() *cerealMessages.UUID {
+func (x *StageID) GetJobId() *cereal.UUID {
 	if x != nil {
 		return x.JobId
 	}
@@ -600,7 +600,7 @@ type CancelJobs struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	JobIds []*cerealMessages.UUID `protobuf:"bytes,1,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
+	JobIds []*cereal.UUID `protobuf:"bytes,1,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
 }
 
 func (x *CancelJobs) Reset() {
@@ -635,7 +635,7 @@ func (*CancelJobs) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_updates_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *CancelJobs) GetJobIds() []*cerealMessages.UUID {
+func (x *CancelJobs) GetJobIds() []*cereal.UUID {
 	if x != nil {
 		return x.JobIds
 	}
@@ -648,7 +648,7 @@ type CancelBatches struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	BatchIds []*cerealMessages.UUID `protobuf:"bytes,1,rep,name=batch_ids,json=batchIds,proto3" json:"batch_ids,omitempty"`
+	BatchIds []*cereal.UUID `protobuf:"bytes,1,rep,name=batch_ids,json=batchIds,proto3" json:"batch_ids,omitempty"`
 }
 
 func (x *CancelBatches) Reset() {
@@ -683,7 +683,7 @@ func (*CancelBatches) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_updates_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *CancelBatches) GetBatchIds() []*cerealMessages.UUID {
+func (x *CancelBatches) GetBatchIds() []*cereal.UUID {
 	if x != nil {
 		return x.BatchIds
 	}
@@ -766,10 +766,10 @@ var file_lucy_proto_updates_proto_rawDesc = []byte{
 	0x64, 0x73, 0x22, 0x3a, 0x0a, 0x0d, 0x43, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x42, 0x61, 0x74, 0x63,
 	0x68, 0x65, 0x73, 0x12, 0x29, 0x0a, 0x09, 0x62, 0x61, 0x74, 0x63, 0x68, 0x5f, 0x69, 0x64, 0x73,
 	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e,
-	0x55, 0x55, 0x49, 0x44, 0x52, 0x08, 0x62, 0x61, 0x74, 0x63, 0x68, 0x49, 0x64, 0x73, 0x42, 0x22,
-	0x5a, 0x20, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61,
-	0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75,
-	0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x55, 0x55, 0x49, 0x44, 0x52, 0x08, 0x62, 0x61, 0x74, 0x63, 0x68, 0x49, 0x64, 0x73, 0x42, 0x26,
+	0x5a, 0x24, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61,
+	0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x70, 0x6b,
+	0x67, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -797,7 +797,7 @@ var file_lucy_proto_updates_proto_goTypes = []interface{}{
 	(*RunnerErrorDetails)(nil),  // 8: lucy.RunnerErrorDetails
 	(*CancelJobs)(nil),          // 9: lucy.CancelJobs
 	(*CancelBatches)(nil),       // 10: lucy.CancelBatches
-	(*cerealMessages.UUID)(nil), // 11: cereal.UUID
+	(*cereal.UUID)(nil),         // 11: cereal.UUID
 	(*protogen.Error)(nil),      // 12: pkerr.Error
 	(*any.Any)(nil),             // 13: google.protobuf.Any
 }

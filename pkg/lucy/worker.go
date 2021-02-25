@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,7 +44,7 @@ type JobRunner struct {
 
 // RunJob runs a job
 func (runner JobRunner) RunJob(
-	ctx context.Context, jobId *cerealMessages.UUID, worker Worker,
+	ctx context.Context, jobId *cereal.UUID, worker Worker,
 ) (result JobResult) {
 	job, err := runner.client.GetJob(ctx, jobId)
 	if err != nil {

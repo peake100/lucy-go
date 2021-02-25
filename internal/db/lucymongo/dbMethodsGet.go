@@ -3,7 +3,7 @@ package lucymongo
 import (
 	"context"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,12 +14,12 @@ import (
 
 // GetBatch implements db.Backend.
 func (backend Backend) GetBatch(
-	ctx context.Context, BatchId *cerealMessages.UUID,
+	ctx context.Context, BatchId *cereal.UUID,
 ) (db.ResultGetBatch, error) {
 	filter := bson.M{"id": BatchId}
 
 	opts := options.FindOne().SetProjection(batchProjection)
-	mongoResult := backend.Jobs.FindOne(ctx, filter, opts)
+	mongoResult := backend.jobs.FindOne(ctx, filter, opts)
 	if err := backend.CheckMongoErr(mongoResult.Err(), ""); err != nil {
 		return db.ResultGetBatch{}, err
 	}
@@ -36,13 +36,13 @@ func (backend Backend) GetBatch(
 
 // GetJob implements db.Backend.
 func (backend Backend) GetJob(
-	ctx context.Context, JobId *cerealMessages.UUID,
+	ctx context.Context, JobId *cereal.UUID,
 ) (db.ResultGetJob, error) {
 	filter := bson.M{"jobs.id": JobId}
 	projection := bson.M{"jobs.$": 1}
 
 	opts := options.FindOne().SetProjection(projection)
-	mongoResult := backend.Jobs.FindOne(ctx, filter, opts)
+	mongoResult := backend.jobs.FindOne(ctx, filter, opts)
 	err := backend.CheckMongoErr(mongoResult.Err(), "")
 	if err != nil {
 		return db.ResultGetJob{}, err
@@ -78,7 +78,6 @@ var batchProjection = MustCompileStaticDocument(bson.M{
 	"completed_count": 1,
 	"success_count":   1,
 	"failure_count":   1,
-	"jobs.id":         1,
 })
 
 // documentDecoder is an interface for mongo results that can decode a document, like
@@ -90,39 +89,22 @@ type documentDecoder interface {
 
 // decodeBatch handles decoding a lucy.Batch from a documentDecoder.
 func decodeBatch(decoder documentDecoder, batch *lucy.Batch) error {
-	// Create a value for us to decode the returned information.
-	decoded := struct {
-		// We'll extract the basic job info here.
-		Batch *lucy.Batch `bson:",inline"`
-		// Then make a struct type to receive the list of jobs which contain only an
-		// 'id' field.
-		JobIds []struct {
-			Id *cerealMessages.UUID `bson:"id"`
-		} `bson:"jobs"`
-	}{}
-
-	decoded.Batch = batch
-	err := decoder.Decode(&decoded)
+	err := decoder.Decode(batch)
 	if err != nil {
 		return fmt.Errorf("error umarshalling batch: %w", err)
-	}
-
-	batch.Jobs = make([]*cerealMessages.UUID, len(decoded.JobIds))
-	for i, jobId := range decoded.JobIds {
-		batch.Jobs[i] = jobId.Id
 	}
 
 	return nil
 }
 
 func (backend Backend) GetBatchJobs(
-	ctx context.Context, BatchId *cerealMessages.UUID,
+	ctx context.Context, BatchId *cereal.UUID,
 ) (db.ResultGetBatchJobs, error) {
 	filter := bson.M{"id": BatchId}
 	projection := bson.M{"jobs": 1}
 
 	opts := options.FindOne().SetProjection(projection)
-	mongoResult := backend.Jobs.FindOne(ctx, filter, opts)
+	mongoResult := backend.jobs.FindOne(ctx, filter, opts)
 	if err := backend.CheckMongoErr(mongoResult.Err(), ""); err != nil {
 		return db.ResultGetBatchJobs{}, err
 	}
@@ -151,7 +133,7 @@ var listBatchesOpts = options.Find().
 
 func (backend Backend) ListBatches(ctx context.Context) (db.ListBatchesCursor, error) {
 	// Set up our cursor
-	cursor, err := backend.Jobs.Find(ctx, bson.M{}, listBatchesOpts)
+	cursor, err := backend.jobs.Find(ctx, bson.M{}, listBatchesOpts)
 	if err != nil {
 		return nil, fmt.Errorf("error getting mongo cursor: %w", err)
 	}

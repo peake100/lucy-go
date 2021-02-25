@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/lucy-go/pkg/lucy"
 )
@@ -11,7 +11,7 @@ import (
 // lucy service.
 type Backend interface {
 	// GetBatch fetches a batch from the database.
-	GetBatch(ctx context.Context, batchId *cerealMessages.UUID) (ResultGetBatch, error)
+	GetBatch(ctx context.Context, batchId *cereal.UUID) (ResultGetBatch, error)
 
 	// ListBatches returns a cursor to fetch batches from most-recently added to
 	// least-recently added.
@@ -19,7 +19,7 @@ type Backend interface {
 
 	// GetBatchJobs fetches a batch's jobs from the database.
 	GetBatchJobs(
-		ctx context.Context, batchId *cerealMessages.UUID,
+		ctx context.Context, batchId *cereal.UUID,
 	) (ResultGetBatchJobs, error)
 
 	// CancelBatches applies a cancellation status to all non-success jobs in the passed
@@ -29,7 +29,7 @@ type Backend interface {
 	) (CancelBatchResultsCursor, error)
 
 	// GetJob fetches a job from the database.
-	GetJob(ctx context.Context, jobId *cerealMessages.UUID) (ResultGetJob, error)
+	GetJob(ctx context.Context, jobId *cereal.UUID) (ResultGetJob, error)
 
 	// CreateBatch creates a new batch.
 	CreateBatch(ctx context.Context, batch *lucy.NewBatch) (ResultCreateBatch, error)
@@ -38,10 +38,13 @@ type Backend interface {
 	CreateJobs(ctx context.Context, jobs *lucy.NewJobs) (ResultCreateJobs, error)
 
 	// CancelJob applies a cancellation status to a single job.
-	CancelJob(ctx context.Context, job *cerealMessages.UUID) (ResultCancelJob, error)
+	CancelJob(ctx context.Context, job *cereal.UUID) (ResultCancelJob, error)
 
 	// UpdateStage applies an update to a job stage.
 	UpdateStage(ctx context.Context, update StageUpdate) (ResultWorkerUpdate, error)
+
+	// Disconnect releases any resources the database connector currently has open.
+	Disconnect(ctx context.Context) error
 }
 
 // ListBatchesCursor yields a new batch record each time Next() is called
@@ -63,3 +66,14 @@ type CancelBatchResultsCursor interface {
 type NewBackendFunc = func(
 	ctx context.Context, errGen *pkerr.ErrorGenerator,
 ) (Backend, error)
+
+// BackendType is an enum-like string value for valid backend specifiers in
+// configuration contexts.
+type BackendType string
+
+const (
+	// BackendTypeMongo denotes a MongoDB backend
+	BackendTypeMongo = "MONGODB"
+	// BackendTypeSQLite denotes an SQLite backend.
+	BackendTypeSQLite = "SQLITE"
+)

@@ -3,7 +3,7 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 	"github.com/peake100/rogerRabbit-go/amqp"
 	"github.com/peake100/rogerRabbit-go/roger"
@@ -214,7 +214,7 @@ func (messenger LucyMessenger) publishEvent(event queuedEvent) {
 // broker.
 func (messenger LucyMessenger) QueueJob(
 	ctx context.Context,
-	jobId *cerealMessages.UUID,
+	jobId *cereal.UUID,
 	jobType string,
 ) (*roger.Publication, error) {
 	// Marshal the job id message.

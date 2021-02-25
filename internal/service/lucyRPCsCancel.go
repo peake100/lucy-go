@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/gRPEAKEC-go/pkmiddleware"
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
@@ -41,7 +41,7 @@ func (service Lucy) cancelBatchFireEvents(
 		if err != nil {
 			logger.Error().
 				Err(fmt.Errorf(
-					"error fetching batch info from db cursor: %w", err,
+					"error fetching batch info from dbMongo cursor: %w", err,
 				)).
 				Msg("error sending batch cancelled events")
 			return
@@ -51,7 +51,7 @@ func (service Lucy) cancelBatchFireEvents(
 }
 
 func (service Lucy) CancelJob(
-	ctx context.Context, job *cerealMessages.UUID,
+	ctx context.Context, job *cereal.UUID,
 ) (*empty.Empty, error) {
 	result, err := service.db.CancelJob(ctx, job)
 	if err != nil {
@@ -65,14 +65,14 @@ func (service Lucy) CancelJob(
 }
 
 func (service Lucy) cancelJobFireEvents(
-	jobId *cerealMessages.UUID,
+	jobId *cereal.UUID,
 	batchInfo db.ResultBatchSummaries,
 	logger zerolog.Logger,
 ) {
 	// TODO: we need to extract the job.modified field here instead of the batch
 	//   modified.
 	service.cancelFireJobEvents(
-		batchInfo.BatchId, []*cerealMessages.UUID{jobId}, batchInfo.Modified, logger,
+		batchInfo.BatchId, []*cereal.UUID{jobId}, batchInfo.Modified, logger,
 	)
 
 	// Build the event.
@@ -92,8 +92,8 @@ func (service Lucy) cancelJobFireEvents(
 }
 
 func (service Lucy) cancelFireJobEvents(
-	batchId *cerealMessages.UUID,
-	jobIds []*cerealMessages.UUID,
+	batchId *cereal.UUID,
+	jobIds []*cereal.UUID,
 	modified *timestamppb.Timestamp,
 	logger zerolog.Logger,
 ) {

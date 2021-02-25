@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
+	"github.com/peake100/gRPEAKEC-go/pkerr"
 	"github.com/peake100/gRPEAKEC-go/pkmiddleware"
 	"github.com/peake100/lucy-go/internal/db"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"github.com/peake100/lucy-go/pkg/lucy/events"
 	"github.com/peake100/rogerRabbit-go/roger"
 	"github.com/rs/zerolog"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"sync"
 )
 
@@ -25,34 +25,50 @@ func (service Lucy) CreateJobs(
 	declareQueuesResult := make(chan error, 1)
 	var updatedData db.ResultBatchSummaries
 
+	// We're going to run the job creation and queue declarations in their owb routines.
+	//
+	// Each routine will need to capture panics since we can't count on our error
+	// middleware to do that for us.
+
+	// Launch the DB update routine.
 	go func() {
-		createdInfo, dbErr := service.db.CreateJobs(
-			ctx, jobs,
-		)
-		if dbErr != nil {
-			dbResult <- dbErr
-			return
+		// Make a function to handle the db update and set results.
+		dbUpdate := func() error {
+			createdInfo, dbErr := service.db.CreateJobs(
+				ctx, jobs,
+			)
+			if dbErr != nil {
+				return dbErr
+			}
+			created = createdInfo.Jobs
+			updatedData = createdInfo.BatchSummaries
+			return nil
 		}
 
-		created = createdInfo.Jobs
-
-		updatedData = createdInfo.BatchSummaries
-		dbResult <- nil
+		// Catch panics and report as error.
+		dbResult <- pkerr.CatchPanic(dbUpdate)
 	}()
 
+	// Declare our job queues in another routine, also catching panics.
 	go func() {
-		declareQueuesResult <- service.createJobsDeclareWorkerQueues(ctx, jobs)
+		declareQueuesResult <- pkerr.CatchPanic(
+			func() error {
+				return service.createJobsDeclareWorkerQueues(ctx, jobs)
+			},
+		)
 	}()
 
+	// Get the db result.
 	select {
 	case err = <-dbResult:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("dbMongo upadate interrupted: %w", err)
+		return nil, fmt.Errorf("db upadate interrupted: %w", err)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("error upating dbMongo record: %w", err)
+		return nil, fmt.Errorf("error upating db record: %w", err)
 	}
 
+	// Get the queue declaration result.
 	select {
 	case err = <-declareQueuesResult:
 	case <-ctx.Done():
@@ -76,20 +92,6 @@ func (service Lucy) CreateJobs(
 
 	// Return the created message.
 	return created, nil
-}
-
-// batchInfoUpdatedResult stores the batch-summary level info from a dbMongo update.
-type batchInfoUpdatedResult struct {
-	BatchId        *cerealMessages.UUID   `bson:"id"`
-	Modified       *timestamppb.Timestamp `bson:"modified"`
-	Progress       float32                `bson:"progress"`
-	JobCount       uint32                 `bson:"job_count"`
-	PendingCount   uint32                 `bson:"pending_count"`
-	CancelledCount uint32                 `bson:"cancelled_count"`
-	RunningCount   uint32                 `bson:"running_count"`
-	CompletedCount uint32                 `bson:"completed_count"`
-	SuccessCount   uint32                 `bson:"success_count"`
-	FailureCount   uint32                 `bson:"failure_count"`
 }
 
 // createJobsDeclareWorkerQueues declares and binds queues on the message broker for the
@@ -143,7 +145,7 @@ func (service Lucy) createJobsDeclareWorkerQueues(
 
 // createJobsSendEvents fires off job creation events.
 func (service Lucy) createJobsSendEvents(
-	batchId *cerealMessages.UUID,
+	batchId *cereal.UUID,
 	created *lucy.CreatedJobs,
 	updatedData db.ResultBatchSummaries,
 	logger zerolog.Logger,
@@ -157,7 +159,6 @@ func (service Lucy) createJobsSendEvents(
 			},
 			Modified: updatedData.Modified,
 		}
-
 		service.messenger.QueueJobCreated(event, logger)
 	}
 
@@ -206,7 +207,7 @@ func (service Lucy) createJobsDeclareJobQueueSingle(
 
 // jobQueueOrder holds information for queueing a job to be published on a worker queue.
 type jobQueueOrder struct {
-	Id      *cerealMessages.UUID
+	Id      *cereal.UUID
 	JobType string
 }
 

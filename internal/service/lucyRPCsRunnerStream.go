@@ -66,7 +66,7 @@ func (service *Lucy) runnerHandleUpdate(
 ) (runnerState, error) {
 	state = updateStageId(state)
 
-	// Apply the update to the DB.
+	// Apply the update to the dbMongo.
 	err := service.applyRunnerUpdate(server, state)
 	if err != nil {
 		return state, err
@@ -132,7 +132,7 @@ func updateStageId(in runnerState) (out runnerState) {
 	return in
 }
 
-// applyRunnerUpdate takes the current runner state and applies the update to the DB.
+// applyRunnerUpdate takes the current runner state and applies the update to the db.
 func (service *Lucy) applyRunnerUpdate(
 	server lucy.Lucy_RunnerServer,
 	state runnerState,

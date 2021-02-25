@@ -9,14 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"io"
 )
 
 // GetBatch implements lucy.LucyServer.
 func (service Lucy) GetBatch(
-	ctx context.Context, uuid *cerealMessages.UUID,
+	ctx context.Context, uuid *cereal.UUID,
 ) (batch *lucy.Batch, err error) {
 	result, err := service.db.GetBatch(ctx, uuid)
 	return result.Batch, nil
@@ -24,7 +24,7 @@ func (service Lucy) GetBatch(
 
 // GetJob implements lucy.LucyServer.
 func (service Lucy) GetJob(
-	ctx context.Context, uuid *cerealMessages.UUID,
+	ctx context.Context, uuid *cereal.UUID,
 ) (*lucy.Job, error) {
 	result, err := service.db.GetJob(ctx, uuid)
 	return result.Job, err
@@ -32,7 +32,7 @@ func (service Lucy) GetJob(
 
 // GetBatchJobs implements lucy.LucyServer.
 func (service Lucy) GetBatchJobs(
-	ctx context.Context, uuid *cerealMessages.UUID,
+	ctx context.Context, uuid *cereal.UUID,
 ) (*lucy.BatchJobs, error) {
 	result, err := service.db.GetBatchJobs(ctx, uuid)
 

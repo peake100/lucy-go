@@ -6,8 +6,8 @@ import (
 )
 
 // Sentinels is the pkerr.SentinelIssuer for lucy, and creates sentinel errors with
-// an issuer of "Jobs".
-var Sentinels = pkerr.NewSentinelIssuer("Jobs", true)
+// an issuer of "jobs".
+var Sentinels = pkerr.NewSentinelIssuer("jobs", true)
 
 // ErrInvalidStageStatus is returned when a job stage update cannot be made because the
 // stage status is in the wrong state.

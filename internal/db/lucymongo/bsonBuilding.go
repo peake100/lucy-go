@@ -2,22 +2,10 @@ package lucymongo
 
 import (
 	"fmt"
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"go.mongodb.org/mongo-driver/bson"
 )
-
-// NewRecordId creates a uuid and creation time for inserting new records.
-func NewRecordId() (recordId *cerealMessages.UUID, err error) {
-	recordId, err = cerealMessages.NewUUIDRandom()
-	if err != nil {
-		return nil, fmt.Errorf(
-			"error generating new UUID: %w", err,
-		)
-	}
-
-	return recordId, nil
-}
 
 // BsonUpdateArrayAtIndex creates a $map expression that updates array at index with
 // value.
@@ -114,17 +102,17 @@ func bsonIncrementSummary(
 	}
 }
 
-func CreateAddJobPipeline(jobs *lucy.NewJobs, jobIds []*cerealMessages.UUID) bson.A {
+func CreateAddJobPipeline(jobs *lucy.NewJobs, jobIds []*cereal.UUID) bson.A {
 	// We're going to use this type to make our new job records.
 	type InsertJob struct {
 		*lucy.NewJob `bson:",inline"`
-		Id           *cerealMessages.UUID `bson:"id"`
-		Created      string               `bson:"created"`
-		Modified     string               `bson:"modified"`
-		Status       lucy.Status          `bson:"status"`
-		Progress     float32              `bson:"progress"`
-		Result       lucy.Result          `bson:"jobQueueResult"`
-		RunCount     uint32               `bson:"run_count"`
+		Id           *cereal.UUID `bson:"id"`
+		Created      string       `bson:"created"`
+		Modified     string       `bson:"modified"`
+		Status       lucy.Status  `bson:"status"`
+		Progress     float32      `bson:"progress"`
+		Result       lucy.Result  `bson:"jobQueueResult"`
+		RunCount     uint32       `bson:"run_count"`
 	}
 
 	// Store our list of records to be inserted into the Batch here.
@@ -345,7 +333,7 @@ func finalizeJobProgress(jobIdentifier string) bson.M {
 // Only PENDING jobs will be cancelled.
 //
 // If jobIds is nil, all pending jobs in affected batches will be cancelled.
-func CancelJobsPipeline(jobId *cerealMessages.UUID) bson.A {
+func CancelJobsPipeline(jobId *cereal.UUID) bson.A {
 	// We are going to do this in a single map action.
 	mapAction := m{
 		"$let": m{

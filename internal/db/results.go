@@ -1,31 +1,33 @@
 package db
 
 import (
-	"github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	"github.com/illuscio-dev/protoCereal-go/cereal"
 	"github.com/peake100/lucy-go/pkg/lucy"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ResultCreateBatch returns the result for creating a batch.
 type ResultCreateBatch struct {
+	// BatchId is the UUID of the newly created batch.
+	BatchId *cereal.UUID
 	// Created is the created record info.
-	Created *lucy.CreatedBatch
+	Created *timestamppb.Timestamp
 	// Modified is the updated modified time for the record.
 	Modified *timestamppb.Timestamp
 }
 
 // ResultBatchSummaries stores the batch-summary level info from a dbMongo update.
 type ResultBatchSummaries struct {
-	BatchId        *cerealMessages.UUID   `bson:"id"`
-	Modified       *timestamppb.Timestamp `bson:"modified"`
-	Progress       float32                `bson:"progress"`
-	JobCount       uint32                 `bson:"job_count"`
-	PendingCount   uint32                 `bson:"pending_count"`
-	CancelledCount uint32                 `bson:"cancelled_count"`
-	RunningCount   uint32                 `bson:"running_count"`
-	CompletedCount uint32                 `bson:"completed_count"`
-	SuccessCount   uint32                 `bson:"success_count"`
-	FailureCount   uint32                 `bson:"failure_count"`
+	BatchId        *cereal.UUID           `bson:"id" db:"id"`
+	Modified       *timestamppb.Timestamp `bson:"modified" db:"-"`
+	Progress       float32                `bson:"progress" db:"progress"`
+	JobCount       uint32                 `bson:"job_count" db:"job_count"`
+	PendingCount   uint32                 `bson:"pending_count" db:"pending_count"`
+	CancelledCount uint32                 `bson:"cancelled_count" db:"cancelled_count"`
+	RunningCount   uint32                 `bson:"running_count" db:"running_count"`
+	CompletedCount uint32                 `bson:"completed_count" db:"completed_count"`
+	SuccessCount   uint32                 `bson:"success_count" db:"success_count"`
+	FailureCount   uint32                 `bson:"failure_count" db:"failure_count"`
 }
 
 // ResultCreateJobs stores the result of a jobs creation db call(s).
@@ -60,7 +62,7 @@ type ResultCancelBatch struct {
 	BatchSummaries ResultBatchSummaries
 	// JobIds contains the id's of the cancelled jobs. Non-cancelled jobs should
 	// have their id's omitted from this operation.
-	JobIds []*cerealMessages.UUID
+	JobIds []*cereal.UUID
 }
 
 // ResultCancelJob stores the result of cancelling a single job.
@@ -98,7 +100,7 @@ type ResultWorkerUpdatedStage struct {
 // update.
 type ResultWorkerUpdatedJob struct {
 	// Id is the UUID of the job.
-	Id *cerealMessages.UUID `bson:"id"`
+	Id *cereal.UUID `bson:"id"`
 	// RunCount is the number of times the job has been run. It is the highest value
 	// of the stages' run_counts.
 	RunCount uint32 `bson:"run_count"`

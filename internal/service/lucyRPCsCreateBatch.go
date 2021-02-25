@@ -27,7 +27,7 @@ func (service Lucy) CreateBatch(
 	}
 
 	event := &events.BatchCreated{
-		Id:       result.Created.BatchId,
+		Id:       result.BatchId,
 		Modified: result.Modified,
 	}
 
@@ -35,14 +35,17 @@ func (service Lucy) CreateBatch(
 	logger := pkmiddleware.LoggerFromCtx(ctx)
 	service.messenger.QueueBatchCreated(event, logger)
 
+	created := new(lucy.CreatedBatch)
+	created.BatchId = result.BatchId
+
 	// If we don't need to create any jobs, return.
 	if batch.Jobs == nil || len(batch.Jobs) == 0 {
-		return result.Created, nil
+		return created, nil
 	}
 
 	// Otherwise create the jobs.
 	createdJobs, err := service.CreateJobs(ctx, &lucy.NewJobs{
-		Batch: result.Created.BatchId,
+		Batch: result.BatchId,
 		Jobs:  batch.Jobs,
 	})
 
@@ -50,7 +53,7 @@ func (service Lucy) CreateBatch(
 	if err != nil {
 		return nil, fmt.Errorf("error adding jobs: %w", err)
 	}
-	result.Created.JobIds = createdJobs.Ids
+	created.JobIds = createdJobs.Ids
 
-	return result.Created, nil
+	return created, nil
 }

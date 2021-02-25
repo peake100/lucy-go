@@ -60,6 +60,7 @@ func (service Lucy) updateJobStageFireBatchUpdate(
 ) {
 	event := &events.BatchUpdated{
 		Id:             updated.Batch.BatchId,
+		Modified:       updated.Batch.Modified,
 		JobCount:       updated.Batch.JobCount,
 		Progress:       updated.Batch.Progress,
 		PendingCount:   updated.Batch.PendingCount,

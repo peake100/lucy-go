@@ -9,7 +9,7 @@ package lucy
 import (
 	proto "github.com/golang/protobuf/proto"
 	any "github.com/golang/protobuf/ptypes/any"
-	cerealMessages "github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	cereal "github.com/illuscio-dev/protoCereal-go/cereal"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -36,24 +36,24 @@ type NewJob struct {
 
 	// type is the human readable value that uniquely identifies this type of job for
 	// workers to filter by.
-	// @inject_tag: bson:"type"
-	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" bson:"type"`
+	// @inject_tag: bson:"type" db:"type"
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" bson:"type" db:"type"`
 	// name is the human-readable name of the job.
-	// @inject_tag: bson:"name"
-	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty" bson:"name"`
+	// @inject_tag: bson:"name" db:"name"
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty" bson:"name" db:"name"`
 	// description is a human-readable description of the job stage.
-	// @inject_tag: bson:"description"
-	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
+	// @inject_tag: bson:"description" db:"description"
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty" bson:"description" db:"description"`
 	// input contains all the settings and data necessary for workers to complete the job.
-	// @inject_tag: bson:"input"
-	Input *any.Any `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty" bson:"input"`
+	// @inject_tag: bson:"input" db:"-"
+	Input *any.Any `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty" bson:"input" db:"-"`
 	// max_retries is the maximum number of times this job can be retried. If 0, no
 	// retries are allowed. Unbounded retries are currently unsupported.
-	// @inject_tag: bson:"max_retries"
-	MaxRetries uint32 `protobuf:"varint,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty" bson:"max_retries"`
+	// @inject_tag: bson:"max_retries" db:"max_retries"
+	MaxRetries uint32 `protobuf:"varint,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty" bson:"max_retries" db:"max_retries"`
 	// stages contains all the stages of the job.
-	// @inject_tag: bson:"stages"
-	Stages []*JobStage `protobuf:"bytes,6,rep,name=stages,proto3" json:"stages,omitempty" bson:"stages"`
+	// @inject_tag: bson:"stages" db:"-"
+	Stages []*JobStage `protobuf:"bytes,6,rep,name=stages,proto3" json:"stages,omitempty" bson:"stages" db:"-"`
 }
 
 func (x *NewJob) Reset() {
@@ -138,7 +138,7 @@ type NewJobs struct {
 
 	// batch is the id of the batch to add these jobs to.
 	// @inject_tag: bson:"batch"
-	Batch *cerealMessages.UUID `protobuf:"bytes,1,opt,name=batch,proto3" json:"batch,omitempty" bson:"batch"`
+	Batch *cereal.UUID `protobuf:"bytes,1,opt,name=batch,proto3" json:"batch,omitempty" bson:"batch"`
 	// jobs is the list of new jobs to insert into the batch.
 	Jobs []*NewJob `protobuf:"bytes,2,rep,name=jobs,proto3" json:"jobs,omitempty"`
 }
@@ -175,7 +175,7 @@ func (*NewJobs) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_create_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *NewJobs) GetBatch() *cerealMessages.UUID {
+func (x *NewJobs) GetBatch() *cereal.UUID {
 	if x != nil {
 		return x.Batch
 	}
@@ -196,7 +196,7 @@ type CreatedJobs struct {
 	unknownFields protoimpl.UnknownFields
 
 	// ids is a list of job uuids in the same order as the new posted jobs.
-	Ids []*cerealMessages.UUID `protobuf:"bytes,1,rep,name=ids,proto3" json:"ids,omitempty"`
+	Ids []*cereal.UUID `protobuf:"bytes,1,rep,name=ids,proto3" json:"ids,omitempty"`
 }
 
 func (x *CreatedJobs) Reset() {
@@ -231,7 +231,7 @@ func (*CreatedJobs) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_create_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CreatedJobs) GetIds() []*cerealMessages.UUID {
+func (x *CreatedJobs) GetIds() []*cereal.UUID {
 	if x != nil {
 		return x.Ids
 	}
@@ -328,10 +328,10 @@ type CreatedBatch struct {
 	unknownFields protoimpl.UnknownFields
 
 	// batch_id is the uuid of the newly created batch
-	BatchId *cerealMessages.UUID `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	BatchId *cereal.UUID `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
 	// job_ids are the job uuids of the newly crated jobs, in the same order they were
 	// submitted.
-	JobIds []*cerealMessages.UUID `protobuf:"bytes,2,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
+	JobIds []*cereal.UUID `protobuf:"bytes,2,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
 }
 
 func (x *CreatedBatch) Reset() {
@@ -366,14 +366,14 @@ func (*CreatedBatch) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_create_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *CreatedBatch) GetBatchId() *cerealMessages.UUID {
+func (x *CreatedBatch) GetBatchId() *cereal.UUID {
 	if x != nil {
 		return x.BatchId
 	}
 	return nil
 }
 
-func (x *CreatedBatch) GetJobIds() []*cerealMessages.UUID {
+func (x *CreatedBatch) GetJobIds() []*cereal.UUID {
 	if x != nil {
 		return x.JobIds
 	}
@@ -423,10 +423,10 @@ var file_lucy_proto_create_proto_rawDesc = []byte{
 	0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x52, 0x07, 0x62, 0x61,
 	0x74, 0x63, 0x68, 0x49, 0x64, 0x12, 0x25, 0x0a, 0x07, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x73,
 	0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e,
-	0x55, 0x55, 0x49, 0x44, 0x52, 0x06, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x73, 0x42, 0x22, 0x5a, 0x20,
+	0x55, 0x55, 0x49, 0x44, 0x52, 0x06, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x73, 0x42, 0x26, 0x5a, 0x24,
 	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65,
-	0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67, 0x6f, 0x2f, 0x70, 0x6b, 0x67, 0x2f,
+	0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -443,14 +443,14 @@ func file_lucy_proto_create_proto_rawDescGZIP() []byte {
 
 var file_lucy_proto_create_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_lucy_proto_create_proto_goTypes = []interface{}{
-	(*NewJob)(nil),              // 0: lucy.NewJob
-	(*NewJobs)(nil),             // 1: lucy.NewJobs
-	(*CreatedJobs)(nil),         // 2: lucy.CreatedJobs
-	(*NewBatch)(nil),            // 3: lucy.NewBatch
-	(*CreatedBatch)(nil),        // 4: lucy.CreatedBatch
-	(*any.Any)(nil),             // 5: google.protobuf.Any
-	(*JobStage)(nil),            // 6: lucy.JobStage
-	(*cerealMessages.UUID)(nil), // 7: cereal.UUID
+	(*NewJob)(nil),       // 0: lucy.NewJob
+	(*NewJobs)(nil),      // 1: lucy.NewJobs
+	(*CreatedJobs)(nil),  // 2: lucy.CreatedJobs
+	(*NewBatch)(nil),     // 3: lucy.NewBatch
+	(*CreatedBatch)(nil), // 4: lucy.CreatedBatch
+	(*any.Any)(nil),      // 5: google.protobuf.Any
+	(*JobStage)(nil),     // 6: lucy.JobStage
+	(*cereal.UUID)(nil),  // 7: cereal.UUID
 }
 var file_lucy_proto_create_proto_depIdxs = []int32{
 	5, // 0: lucy.NewJob.input:type_name -> google.protobuf.Any

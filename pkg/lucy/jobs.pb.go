@@ -10,7 +10,7 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	any "github.com/golang/protobuf/ptypes/any"
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
-	cerealMessages "github.com/illuscio-dev/protoCereal-go/cerealMessages"
+	cereal "github.com/illuscio-dev/protoCereal-go/cereal"
 	protogen "github.com/peake100/gRPEAKEC-go/pkerr/protogen"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -148,38 +148,38 @@ type JobStage struct {
 
 	// type a human-readable identifier for the stage of work to be created. This value
 	// must be unique within a job.
-	// @inject_tag: bson:"type"
-	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" bson:"type"`
+	// @inject_tag: bson:"type" db:"type"
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" bson:"type" db:"type"`
 	// description is the human-readable description of the job.
-	// @inject_tag: bson:"description"
-	Description string `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
+	// @inject_tag: bson:"description" db:"description"
+	Description string `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty" bson:"description" db:"description"`
 	// Status is the status of the job stage.
-	// @inject_tag: bson:"status"
-	Status Status `protobuf:"varint,3,opt,name=status,proto3,enum=lucy.Status" json:"status,omitempty" bson:"status"`
+	// @inject_tag: bson:"status" db:"-"
+	Status Status `protobuf:"varint,3,opt,name=status,proto3,enum=lucy.Status" json:"status,omitempty" bson:"status" db:"-"`
 	// run_by is the name of the worker who ran this JobStage.
-	// @inject_tag: bson:"run_by"
-	RunBy string `protobuf:"bytes,4,opt,name=run_by,json=runBy,proto3" json:"run_by,omitempty" bson:"run_by"`
+	// @inject_tag: bson:"run_by" db:"run_by"
+	RunBy string `protobuf:"bytes,4,opt,name=run_by,json=runBy,proto3" json:"run_by,omitempty" bson:"run_by" db:"run_by"`
 	// started is the time the job stage was started.
-	// @inject_tag: bson:"started"
-	Started *timestamp.Timestamp `protobuf:"bytes,5,opt,name=started,proto3" json:"started,omitempty" bson:"started"`
+	// @inject_tag: bson:"started" db:"-"
+	Started *timestamp.Timestamp `protobuf:"bytes,5,opt,name=started,proto3" json:"started,omitempty" bson:"started" db:"-"`
 	// completed is the time the job stage was completed.
-	// @inject_tag: bson:"completed"
-	Completed *timestamp.Timestamp `protobuf:"bytes,6,opt,name=completed,proto3" json:"completed,omitempty" bson:"completed"`
+	// @inject_tag: bson:"completed" db:"-"
+	Completed *timestamp.Timestamp `protobuf:"bytes,6,opt,name=completed,proto3" json:"completed,omitempty" bson:"completed" db:"-"`
 	// progress contains the approximate progress of the job from 0.0 - 1.0.
-	// @inject_tag: bson:"progress"
-	Progress float32 `protobuf:"fixed32,7,opt,name=progress,proto3" json:"progress,omitempty" bson:"progress"`
+	// @inject_tag: bson:"progress" db:"progress"
+	Progress float32 `protobuf:"fixed32,7,opt,name=progress,proto3" json:"progress,omitempty" bson:"progress" db:"progress"`
 	// result is whether the job was successful.
-	// @inject_tag: bson:"result"
-	Result Result `protobuf:"varint,8,opt,name=result,proto3,enum=lucy.Result" json:"result,omitempty" bson:"result"`
+	// @inject_tag: bson:"result" db:"-"
+	Result Result `protobuf:"varint,8,opt,name=result,proto3,enum=lucy.Result" json:"result,omitempty" bson:"result" db:"-"`
 	// error contains error information about the job stage.
-	// @inject_tag: bson:"error"
-	Error *protogen.Error `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty" bson:"error"`
+	// @inject_tag: bson:"error" db:"-"
+	Error *protogen.Error `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty" bson:"error" db:"-"`
 	// result_data contains job completion data from the worker.
-	// @inject_tag: bson:"result_data"
-	ResultData *any.Any `protobuf:"bytes,10,opt,name=result_data,json=resultData,proto3" json:"result_data,omitempty" bson:"result_data"`
+	// @inject_tag: bson:"result_data" db:"-"
+	ResultData *any.Any `protobuf:"bytes,10,opt,name=result_data,json=resultData,proto3" json:"result_data,omitempty" bson:"result_data" db:"-"`
 	// run_count is the number of times this job stage has been run.
-	// @inject_tag: bson:"run_count"
-	RunCount uint32 `protobuf:"varint,11,opt,name=run_count,json=runCount,proto3" json:"run_count,omitempty" bson:"run_count"`
+	// @inject_tag: bson:"run_count" db:"run_count"
+	RunCount uint32 `protobuf:"varint,11,opt,name=run_count,json=runCount,proto3" json:"run_count,omitempty" bson:"run_count" db:"run_count"`
 }
 
 func (x *JobStage) Reset() {
@@ -299,46 +299,46 @@ type Job struct {
 	unknownFields protoimpl.UnknownFields
 
 	// id is a UUID for the job
-	// @inject_tag: bson:"id"
-	Id *cerealMessages.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty" bson:"id"`
+	// @inject_tag: bson:"id" db:"id"
+	Id *cereal.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty" bson:"id" db:"id"`
 	// created is the time the job was created.
-	// @inject_tag: bson:"created"
-	Created *timestamp.Timestamp `protobuf:"bytes,2,opt,name=created,proto3" json:"created,omitempty" bson:"created"`
+	// @inject_tag: bson:"created" db:"-"
+	Created *timestamp.Timestamp `protobuf:"bytes,2,opt,name=created,proto3" json:"created,omitempty" bson:"created" db:"-"`
 	// modified is the time the last modification to the job was made.
-	// @inject_tag: bson:"modified"
-	Modified *timestamp.Timestamp `protobuf:"bytes,3,opt,name=modified,proto3" json:"modified,omitempty" bson:"modified"`
+	// @inject_tag: bson:"modified" db:"-"
+	Modified *timestamp.Timestamp `protobuf:"bytes,3,opt,name=modified,proto3" json:"modified,omitempty" bson:"modified" db:"-"`
 	// human readable value that uniquely identifies this type of job for workers to
 	// filter by.
-	// @inject_tag: bson:"type"
-	Type string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty" bson:"type"`
+	// @inject_tag: bson:"type" db:"type"
+	Type string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty" bson:"type" db:"type"`
 	// name is the human-readable name of the job.
-	// @inject_tag: bson:"name"
-	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty" bson:"name"`
+	// @inject_tag: bson:"name" db:"name"
+	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty" bson:"name" db:"name"`
 	// description is a human-readable description of the job stage.
-	// @inject_tag: bson:"description"
-	Description string `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
+	// @inject_tag: bson:"description" db:"description"
+	Description string `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty" bson:"description" db:"description"`
 	// input contains all the settings and data necessary for workers to complete the job.
-	// @inject_tag: bson:"input"
-	Input *any.Any `protobuf:"bytes,7,opt,name=input,proto3" json:"input,omitempty" bson:"input"`
+	// @inject_tag: bson:"input" db:"-"
+	Input *any.Any `protobuf:"bytes,7,opt,name=input,proto3" json:"input,omitempty" bson:"input" db:"-"`
 	// max_retries is the maximum number of times this job can be retried. If 0, no
 	// retries are allowed. Unbounded retries are currently unsupported.
-	// @inject_tag: bson:"max_retries"
-	MaxRetries uint32 `protobuf:"varint,8,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty" bson:"max_retries"`
+	// @inject_tag: bson:"max_retries" db:"max_retries"
+	MaxRetries uint32 `protobuf:"varint,8,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty" bson:"max_retries" db:"max_retries"`
 	// stages contains all the stages of the job.
-	// @inject_tag: bson:"stages"
-	Stages []*JobStage `protobuf:"bytes,9,rep,name=stages,proto3" json:"stages,omitempty" bson:"stages"`
+	// @inject_tag: bson:"stages" db:"-"
+	Stages []*JobStage `protobuf:"bytes,9,rep,name=stages,proto3" json:"stages,omitempty" bson:"stages" db:"-"`
 	// status contains the current state of the job.
-	// @inject_tag: bson:"status"
-	Status Status `protobuf:"varint,10,opt,name=status,proto3,enum=lucy.Status" json:"status,omitempty" bson:"status"`
+	// @inject_tag: bson:"status" db:"-"
+	Status Status `protobuf:"varint,10,opt,name=status,proto3,enum=lucy.Status" json:"status,omitempty" bson:"status" db:"-"`
 	// the total progress of the job from 0.0 - 1.0.
-	// @inject_tag: bson:"progress"
-	Progress float32 `protobuf:"fixed32,11,opt,name=progress,proto3" json:"progress,omitempty" bson:"progress"`
+	// @inject_tag: bson:"progress" db:"progress"
+	Progress float32 `protobuf:"fixed32,11,opt,name=progress,proto3" json:"progress,omitempty" bson:"progress" db:"progress"`
 	// result contains whether job succeeded or failed.
-	// @inject_tag: bson:"result"
-	Result Result `protobuf:"varint,12,opt,name=result,proto3,enum=lucy.Result" json:"result,omitempty" bson:"result"`
+	// @inject_tag: bson:"result" db:"-"
+	Result Result `protobuf:"varint,12,opt,name=result,proto3,enum=lucy.Result" json:"result,omitempty" bson:"result" db:"-"`
 	// Runs is the number of times this job has been run.
-	// @inject_tag: bson:"run_count"
-	RunCount uint32 `protobuf:"varint,13,opt,name=run_count,json=runCount,proto3" json:"run_count,omitempty" bson:"run_count"`
+	// @inject_tag: bson:"run_count" db:"run_count"
+	RunCount uint32 `protobuf:"varint,13,opt,name=run_count,json=runCount,proto3" json:"run_count,omitempty" bson:"run_count" db:"run_count"`
 }
 
 func (x *Job) Reset() {
@@ -373,7 +373,7 @@ func (*Job) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_jobs_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Job) GetId() *cerealMessages.UUID {
+func (x *Job) GetId() *cereal.UUID {
 	if x != nil {
 		return x.Id
 	}
@@ -472,50 +472,48 @@ type Batch struct {
 	unknownFields protoimpl.UnknownFields
 
 	// id is a UUID for the job.
-	// @inject_tag: bson:"id"
-	Id *cerealMessages.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty" bson:"id"`
+	// @inject_tag: bson:"id" db:"id"
+	Id *cereal.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty" bson:"id" db:"id"`
 	// created is the time the job was created.
-	// @inject_tag: bson:"created"
-	Created *timestamp.Timestamp `protobuf:"bytes,2,opt,name=created,proto3" json:"created,omitempty" bson:"created"`
+	// @inject_tag: bson:"created" db:"-"
+	Created *timestamp.Timestamp `protobuf:"bytes,2,opt,name=created,proto3" json:"created,omitempty" bson:"created" db:"-"`
 	// modified is the time the last modification to the job was made.
-	// @inject_tag: bson:"modified"
-	Modified *timestamp.Timestamp `protobuf:"bytes,3,opt,name=modified,proto3" json:"modified,omitempty" bson:"modified"`
+	// @inject_tag: bson:"modified" db:"-"
+	Modified *timestamp.Timestamp `protobuf:"bytes,3,opt,name=modified,proto3" json:"modified,omitempty" bson:"modified" db:"-"`
 	// human readable value that uniquely identifies this type of batch for workers to
 	// filter by.
-	// @inject_tag: bson:"type"
-	Type string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty" bson:"type"`
+	// @inject_tag: bson:"type" db:"type"
+	Type string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty" bson:"type" db:"type"`
 	// name is the human-readable name of the batch.
-	// @inject_tag: bson:"name"
-	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty" bson:"name"`
+	// @inject_tag: bson:"name" db:"name"
+	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty" bson:"name" db:"name"`
 	// description is the human-readable description of the batch.
-	// @inject_tag: bson:"description"
-	Description string `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty" bson:"description"`
-	// @inject_tag: bson:"-"
-	Jobs []*cerealMessages.UUID `protobuf:"bytes,7,rep,name=jobs,proto3" json:"jobs,omitempty" bson:"-"`
+	// @inject_tag: bson:"description" db:"description"
+	Description string `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty" bson:"description" db:"description"`
 	// job_count is the number of jobs that are part of this batch.
-	// @inject_tag: bson:"job_count"
-	JobCount uint32 `protobuf:"varint,8,opt,name=job_count,json=jobCount,proto3" json:"job_count,omitempty" bson:"job_count"`
+	// @inject_tag: bson:"job_count" db:"job_count"
+	JobCount uint32 `protobuf:"varint,8,opt,name=job_count,json=jobCount,proto3" json:"job_count,omitempty" bson:"job_count" db:"job_count"`
 	// progress is the total progress on this batch from 0.0 - 1.0.
 	// @inject_tag: bson:"progress"
 	Progress float32 `protobuf:"fixed32,9,opt,name=progress,proto3" json:"progress,omitempty" bson:"progress"`
 	// pending_count is the number pending jobs in this batch.
-	// @inject_tag: bson:"pending_count"
-	PendingCount uint32 `protobuf:"varint,10,opt,name=pending_count,json=pendingCount,proto3" json:"pending_count,omitempty" bson:"pending_count"`
+	// @inject_tag: bson:"pending_count" db:"pending_count"
+	PendingCount uint32 `protobuf:"varint,10,opt,name=pending_count,json=pendingCount,proto3" json:"pending_count,omitempty" bson:"pending_count" db:"pending_count"`
 	// cancelled_count is the number cancelled jobs in this batch.
-	// @inject_tag: bson:"cancelled_count"
-	CancelledCount uint32 `protobuf:"varint,11,opt,name=cancelled_count,json=cancelledCount,proto3" json:"cancelled_count,omitempty" bson:"cancelled_count"`
+	// @inject_tag: bson:"cancelled_count" db:"cancelled_count"
+	CancelledCount uint32 `protobuf:"varint,11,opt,name=cancelled_count,json=cancelledCount,proto3" json:"cancelled_count,omitempty" bson:"cancelled_count" db:"cancelled_count"`
 	// running_count is the number running jobs in this batch.
-	// @inject_tag: bson:"running_count"
-	RunningCount uint32 `protobuf:"varint,12,opt,name=running_count,json=runningCount,proto3" json:"running_count,omitempty" bson:"running_count"`
+	// @inject_tag: bson:"running_count" db:"running_count"
+	RunningCount uint32 `protobuf:"varint,12,opt,name=running_count,json=runningCount,proto3" json:"running_count,omitempty" bson:"running_count" db:"running_count"`
 	// completed_count is the number completed jobs in this batch.
-	// @inject_tag: bson:"completed_count"
-	CompletedCount uint32 `protobuf:"varint,13,opt,name=completed_count,json=completedCount,proto3" json:"completed_count,omitempty" bson:"completed_count"`
+	// @inject_tag: bson:"completed_count" db:"completed_count"
+	CompletedCount uint32 `protobuf:"varint,13,opt,name=completed_count,json=completedCount,proto3" json:"completed_count,omitempty" bson:"completed_count" db:"completed_count"`
 	// success_count is the number of successes this batch
-	// @inject_tag: bson:"success_count"
-	SuccessCount uint32 `protobuf:"varint,14,opt,name=success_count,json=successCount,proto3" json:"success_count,omitempty" bson:"success_count"`
+	// @inject_tag: bson:"success_count" db:"success_count"
+	SuccessCount uint32 `protobuf:"varint,14,opt,name=success_count,json=successCount,proto3" json:"success_count,omitempty" bson:"success_count" db:"success_count"`
 	// failure count is the number of failures in this batch.
-	// @inject_tag: bson:"failure_count"
-	FailureCount uint32 `protobuf:"varint,15,opt,name=failure_count,json=failureCount,proto3" json:"failure_count,omitempty" bson:"failure_count"`
+	// @inject_tag: bson:"failure_count" db:"failure_count"
+	FailureCount uint32 `protobuf:"varint,15,opt,name=failure_count,json=failureCount,proto3" json:"failure_count,omitempty" bson:"failure_count" db:"failure_count"`
 }
 
 func (x *Batch) Reset() {
@@ -550,7 +548,7 @@ func (*Batch) Descriptor() ([]byte, []int) {
 	return file_lucy_proto_jobs_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Batch) GetId() *cerealMessages.UUID {
+func (x *Batch) GetId() *cereal.UUID {
 	if x != nil {
 		return x.Id
 	}
@@ -590,13 +588,6 @@ func (x *Batch) GetDescription() string {
 		return x.Description
 	}
 	return ""
-}
-
-func (x *Batch) GetJobs() []*cerealMessages.UUID {
-	if x != nil {
-		return x.Jobs
-	}
-	return nil
 }
 
 func (x *Batch) GetJobCount() uint32 {
@@ -773,7 +764,7 @@ var file_lucy_proto_jobs_proto_rawDesc = []byte{
 	0x01, 0x28, 0x0e, 0x32, 0x0c, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c,
 	0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x72, 0x75, 0x6e,
 	0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0d, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x72, 0x75,
-	0x6e, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x9e, 0x04, 0x0a, 0x05, 0x42, 0x61, 0x74, 0x63, 0x68,
+	0x6e, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0xfc, 0x03, 0x0a, 0x05, 0x42, 0x61, 0x74, 0x63, 0x68,
 	0x12, 0x1c, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63,
 	0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55, 0x49, 0x44, 0x52, 0x02, 0x69, 0x64, 0x12, 0x34,
 	0x0a, 0x07, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
@@ -787,39 +778,38 @@ var file_lucy_proto_jobs_proto_rawDesc = []byte{
 	0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
 	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x20, 0x0a, 0x0b, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74,
 	0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x64, 0x65, 0x73, 0x63, 0x72,
-	0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x18, 0x07,
-	0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63, 0x65, 0x72, 0x65, 0x61, 0x6c, 0x2e, 0x55, 0x55,
-	0x49, 0x44, 0x52, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x6a, 0x6f, 0x62, 0x5f,
-	0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x6a, 0x6f, 0x62,
-	0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73,
-	0x73, 0x18, 0x09, 0x20, 0x01, 0x28, 0x02, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73,
-	0x73, 0x12, 0x23, 0x0a, 0x0d, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x5f, 0x63, 0x6f, 0x75,
-	0x6e, 0x74, 0x18, 0x0a, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e,
-	0x67, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c,
-	0x6c, 0x65, 0x64, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0b, 0x20, 0x01, 0x28, 0x0d, 0x52,
-	0x0e, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12,
-	0x23, 0x0a, 0x0d, 0x72, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74,
-	0x18, 0x0c, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x72, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x43,
-	0x6f, 0x75, 0x6e, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x63, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65,
-	0x64, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0d, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0e, 0x63,
-	0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x23, 0x0a,
-	0x0d, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0e,
-	0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x43, 0x6f, 0x75,
-	0x6e, 0x74, 0x12, 0x23, 0x0a, 0x0d, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x5f, 0x63, 0x6f,
-	0x75, 0x6e, 0x74, 0x18, 0x0f, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x66, 0x61, 0x69, 0x6c, 0x75,
-	0x72, 0x65, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x2a, 0x0a, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68,
-	0x4a, 0x6f, 0x62, 0x73, 0x12, 0x1d, 0x0a, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x18, 0x01, 0x20, 0x03,
-	0x28, 0x0b, 0x32, 0x09, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x04, 0x6a,
-	0x6f, 0x62, 0x73, 0x2a, 0x40, 0x0a, 0x06, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x0b, 0x0a,
-	0x07, 0x50, 0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x41,
-	0x4e, 0x43, 0x45, 0x4c, 0x4c, 0x45, 0x44, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x55, 0x4e,
-	0x4e, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x4f, 0x4d, 0x50, 0x4c, 0x45,
-	0x54, 0x45, 0x44, 0x10, 0x03, 0x2a, 0x2d, 0x0a, 0x06, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12,
-	0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x46, 0x41, 0x49,
-	0x4c, 0x45, 0x44, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x53, 0x55, 0x43, 0x43, 0x45, 0x45, 0x44,
-	0x45, 0x44, 0x10, 0x02, 0x42, 0x22, 0x5a, 0x20, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79,
-	0x2d, 0x67, 0x6f, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1b, 0x0a, 0x09, 0x6a, 0x6f, 0x62, 0x5f, 0x63, 0x6f,
+	0x75, 0x6e, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x6a, 0x6f, 0x62, 0x43, 0x6f,
+	0x75, 0x6e, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x18,
+	0x09, 0x20, 0x01, 0x28, 0x02, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x12,
+	0x23, 0x0a, 0x0d, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74,
+	0x18, 0x0a, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43,
+	0x6f, 0x75, 0x6e, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x63, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x6c, 0x65,
+	0x64, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0b, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0e, 0x63,
+	0x61, 0x6e, 0x63, 0x65, 0x6c, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x23, 0x0a,
+	0x0d, 0x72, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0c,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x72, 0x75, 0x6e, 0x6e, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x75,
+	0x6e, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x63, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x5f,
+	0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0d, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0e, 0x63, 0x6f, 0x6d,
+	0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x23, 0x0a, 0x0d, 0x73,
+	0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x0e, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x0c, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74,
+	0x12, 0x23, 0x0a, 0x0d, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x5f, 0x63, 0x6f, 0x75, 0x6e,
+	0x74, 0x18, 0x0f, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65,
+	0x43, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x2a, 0x0a, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68, 0x4a, 0x6f,
+	0x62, 0x73, 0x12, 0x1d, 0x0a, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x09, 0x2e, 0x6c, 0x75, 0x63, 0x79, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x04, 0x6a, 0x6f, 0x62,
+	0x73, 0x2a, 0x40, 0x0a, 0x06, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x0b, 0x0a, 0x07, 0x50,
+	0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x41, 0x4e, 0x43,
+	0x45, 0x4c, 0x4c, 0x45, 0x44, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x55, 0x4e, 0x4e, 0x49,
+	0x4e, 0x47, 0x10, 0x02, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x4f, 0x4d, 0x50, 0x4c, 0x45, 0x54, 0x45,
+	0x44, 0x10, 0x03, 0x2a, 0x2d, 0x0a, 0x06, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x08, 0x0a,
+	0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x46, 0x41, 0x49, 0x4c, 0x45,
+	0x44, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x53, 0x55, 0x43, 0x43, 0x45, 0x45, 0x44, 0x45, 0x44,
+	0x10, 0x02, 0x42, 0x26, 0x5a, 0x24, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
+	0x2f, 0x70, 0x65, 0x61, 0x6b, 0x65, 0x31, 0x30, 0x30, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x2d, 0x67,
+	0x6f, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x6c, 0x75, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x33,
 }
 
 var (
@@ -846,7 +836,7 @@ var file_lucy_proto_jobs_proto_goTypes = []interface{}{
 	(*timestamp.Timestamp)(nil), // 6: google.protobuf.Timestamp
 	(*protogen.Error)(nil),      // 7: pkerr.Error
 	(*any.Any)(nil),             // 8: google.protobuf.Any
-	(*cerealMessages.UUID)(nil), // 9: cereal.UUID
+	(*cereal.UUID)(nil),         // 9: cereal.UUID
 }
 var file_lucy_proto_jobs_proto_depIdxs = []int32{
 	0,  // 0: lucy.JobStage.status:type_name -> lucy.Status
@@ -865,13 +855,12 @@ var file_lucy_proto_jobs_proto_depIdxs = []int32{
 	9,  // 13: lucy.Batch.id:type_name -> cereal.UUID
 	6,  // 14: lucy.Batch.created:type_name -> google.protobuf.Timestamp
 	6,  // 15: lucy.Batch.modified:type_name -> google.protobuf.Timestamp
-	9,  // 16: lucy.Batch.jobs:type_name -> cereal.UUID
-	3,  // 17: lucy.BatchJobs.jobs:type_name -> lucy.Job
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	3,  // 16: lucy.BatchJobs.jobs:type_name -> lucy.Job
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_lucy_proto_jobs_proto_init() }
